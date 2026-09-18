@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Application -->
+    <string name="app_name">E-ReQuest</string>
+    <string name="app_tagline">Your Campus Transaction Guide</string>
+
+    <!-- Home Screen -->
+    <string name="welcome_title">Welcome to E-ReQuest</string>
+    <string name="welcome_subtitle">Find the information you need for your school transactions.</string>
+    <string name="search_hint">Search transactions...</string>
+
+    <!-- Main Sections -->
+    <string name="school_services">School Services</string>
+    <string name="popular_transactions">Popular Transactions</string>
+    <string name="important_reminders">Important Reminders</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_services">Services</string>
+    <string name="nav_progress">Progress</string>
+
+    <!-- Transaction Information -->
+    <string name="transaction_details">Transaction Details</string>
+    <string name="requirements">Requirements</string>
+    <string name="procedure">Step-by-Step Procedure</string>
+    <string name="office_information">Office Information</string>
+    <string name="office_schedule">Office Schedule</string>
+    <string name="reminders">Reminders</string>
+
+    <!-- Checklist -->
+    <string name="start_checklist">Start Checklist</string>
+    <string name="my_checklist">My Checklist</string>
+    <string name="my_progress">My Progress</string>
+    <string name="completed">Completed</string>
+    <string name="reset_checklist">Reset Checklist</string>
+
+    <!-- Offline Mode -->
+    <string name="offline_mode">Offline Mode</string>
+    <string name="offline_message">Showing information saved on your device.</string>
+    <string name="last_updated">Last Updated</string>
+    <string name="check_updates">Check for Updates</string>
+
+    <!-- Admin -->
+    <string name="admin_login">Administrator Login</string>
+    <string name="admin_dashboard">Admin Dashboard</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="logout">Logout</string>
+
+    <!-- Admin Management -->
+    <string name="manage_transactions">Manage Transactions</string>
+    <string name="manage_offices">Manage Offices</string>
+    <string name="manage_schedules">Manage Schedules</string>
+    <string name="manage_reminders">Manage Reminders</string>
+    <string name="add_transaction">Add Transaction</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+
+</resources>

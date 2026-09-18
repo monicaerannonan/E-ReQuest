@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- E-ReQuest Main Brand Colors -->
+    <color name="primary">#173B57</color>
+    <color name="primary_dark">#102A3E</color>
+    <color name="primary_light">#2F6B8A</color>
+
+    <!-- Accent Color -->
+    <color name="accent">#E6A817</color>
+    <color name="accent_light">#F4C95D</color>
+
+    <!-- Application Background -->
+    <color name="background">#F7F9FB</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="card_background">#FFFFFF</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#17212B</color>
+    <color name="text_secondary">#667085</color>
+    <color name="text_hint">#98A2B3</color>
+    <color name="text_white">#FFFFFF</color>
+
+    <!-- Status Colors -->
+    <color name="success">#2E7D5B</color>
+    <color name="error">#C94A4A</color>
+    <color name="warning">#E6A817</color>
+
+    <!-- UI Elements -->
+    <color name="divider">#E4E7EC</color>
+    <color name="border">#D0D5DD</color>
+
+    <!-- Default Colors -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+</resources>
