@@ -64,6 +64,18 @@
 
         </LinearLayout>
 
+        <!-- REFRESH BUTTON -->
+        <ImageView
+            android:id="@+id/btnRefresh"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:clickable="true"
+            android:contentDescription="Refresh"
+            android:focusable="true"
+            android:padding="11dp"
+            android:src="@drawable/ic_refresh"
+            app:tint="@color/text_white" />
+
     </LinearLayout>
 
 

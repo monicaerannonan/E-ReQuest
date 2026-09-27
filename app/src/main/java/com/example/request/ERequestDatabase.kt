@@ -12,9 +12,10 @@ import androidx.room.RoomDatabase
         RequirementEntity::class,
         ProcedureStepEntity::class,
         DepartmentGuidelineEntity::class,
-        AnnouncementEntity::class
+        AnnouncementEntity::class,
+        UpdateNotificationEntity::class
     ],
-    version = 1,
+    version = 4,
     exportSchema = false
 )
 abstract class ERequestDatabase : RoomDatabase() {
@@ -22,18 +23,27 @@ abstract class ERequestDatabase : RoomDatabase() {
     abstract fun eRequestDao(): ERequestDao
 
     companion object {
+
         @Volatile
         private var INSTANCE: ERequestDatabase? = null
 
-        fun getDatabase(context: Context): ERequestDatabase {
+        fun getDatabase(
+            context: Context
+        ): ERequestDatabase {
+
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    ERequestDatabase::class.java,
-                    "erequest_database"
-                ).build()
+
+                val instance =
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        ERequestDatabase::class.java,
+                        "erequest_database"
+                    )
+                        .fallbackToDestructiveMigration()
+                        .build()
 
                 INSTANCE = instance
+
                 instance
             }
         }

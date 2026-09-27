@@ -8,6 +8,10 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class RequirementChecklistActivity : AppCompatActivity() {
 
@@ -20,122 +24,317 @@ class RequirementChecklistActivity : AppCompatActivity() {
     private lateinit var tvCompleteMessage: TextView
     private lateinit var btnResetChecklist: Button
 
+    private lateinit var dao: ERequestDao
+
     private var transactionId = ""
     private var transactionName = ""
-    private var requirements: List<String> = emptyList()
+
+    private var requirements: List<RequirementEntity> = emptyList()
+
     private val checkBoxes = mutableListOf<CheckBox>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_requirement_checklist)
+
+        // =====================================================
+        // CONNECT XML
+        // =====================================================
 
         btnBack = findViewById(R.id.btnBack)
         tvChecklistTitle = findViewById(R.id.tvChecklistTitle)
         tvProgress = findViewById(R.id.tvProgress)
         tvPercentage = findViewById(R.id.tvPercentage)
         progressBar = findViewById(R.id.progressBar)
-        requirementsChecklistContainer = findViewById(R.id.requirementsChecklistContainer)
-        tvCompleteMessage = findViewById(R.id.tvCompleteMessage)
-        btnResetChecklist = findViewById(R.id.btnResetChecklist)
 
-        transactionId = intent.getStringExtra("TRANSACTION_ID") ?: ""
-        transactionName = intent.getStringExtra("TRANSACTION_NAME") ?: "Transaction"
+        requirementsChecklistContainer =
+            findViewById(R.id.requirementsChecklistContainer)
+
+        tvCompleteMessage =
+            findViewById(R.id.tvCompleteMessage)
+
+        btnResetChecklist =
+            findViewById(R.id.btnResetChecklist)
+
+        // =====================================================
+        // ROOM DATABASE
+        // =====================================================
+
+        dao = ERequestDatabase
+            .getDatabase(applicationContext)
+            .eRequestDao()
+
+        // =====================================================
+        // RECEIVE TRANSACTION
+        // =====================================================
+
+        transactionId =
+            intent.getStringExtra("TRANSACTION_ID") ?: ""
+
+        transactionName =
+            intent.getStringExtra("TRANSACTION_NAME")
+                ?: "Transaction"
 
         tvChecklistTitle.text = transactionName
 
-        // Requirements now come from ONE shared source.
-        requirements = TransactionRepository.getRequirements(transactionId)
+        // =====================================================
+        // LOAD REQUIREMENTS FROM ROOM
+        // =====================================================
 
-        createRequirementChecklist()
+        loadRequirements()
+
+        // =====================================================
+        // BACK BUTTON
+        // =====================================================
 
         btnBack.setOnClickListener {
             finish()
         }
+
+        // =====================================================
+        // RESET CHECKLIST
+        // =====================================================
 
         btnResetChecklist.setOnClickListener {
             resetChecklist()
         }
     }
 
-    private fun createRequirementChecklist() {
-        requirementsChecklistContainer.removeAllViews()
-        checkBoxes.clear()
+    // =========================================================
+    // LOAD REQUIREMENTS FROM ROOM DATABASE
+    // =========================================================
 
-        if (requirements.isEmpty()) {
-            val noRequirements = TextView(this).apply {
-                text = "No requirements available."
-                textSize = 14f
-                setTextColor(getColor(R.color.text_secondary))
-                setPadding(12, 16, 12, 16)
+    private fun loadRequirements() {
+
+        lifecycleScope.launch {
+
+            val roomRequirements = withContext(Dispatchers.IO) {
+
+                dao.getRequirements(transactionId)
             }
 
-            requirementsChecklistContainer.addView(noRequirements)
+            requirements = roomRequirements
+                .filter { it.isActive }
+                .sortedBy { it.displayOrder }
+
+            createRequirementChecklist()
+        }
+    }
+
+    // =========================================================
+    // CREATE CHECKLIST
+    // =========================================================
+
+    private fun createRequirementChecklist() {
+
+        requirementsChecklistContainer.removeAllViews()
+
+        checkBoxes.clear()
+
+        // =====================================================
+        // NO REQUIREMENTS
+        // =====================================================
+
+        if (requirements.isEmpty()) {
+
+            val noRequirements =
+                TextView(this).apply {
+
+                    text = "No requirements available."
+
+                    textSize = 14f
+
+                    setTextColor(
+                        getColor(R.color.text_secondary)
+                    )
+
+                    setPadding(
+                        12,
+                        16,
+                        12,
+                        16
+                    )
+                }
+
+            requirementsChecklistContainer.addView(
+                noRequirements
+            )
+
             updateProgress()
+
             return
         }
 
-        requirements.forEachIndexed { index, requirement ->
+        // =====================================================
+        // DISPLAY REQUIREMENTS
+        // =====================================================
 
-            val checkBox = CheckBox(this).apply {
-                text = requirement
-                textSize = 15f
-                setTextColor(getColor(R.color.text_primary))
-                setPadding(8, 14, 8, 14)
+        requirements.forEach { requirement ->
 
-                // Restore saved checkbox state.
-                isChecked = loadRequirementStatus(index)
+            val checkBox =
+                CheckBox(this).apply {
 
-                setOnCheckedChangeListener { _, isChecked ->
-                    saveRequirementStatus(index, isChecked)
-                    updateProgress()
+                    text =
+                        requirement.requirementText
+
+                    textSize = 15f
+
+                    setTextColor(
+                        getColor(R.color.text_primary)
+                    )
+
+                    setPadding(
+                        8,
+                        14,
+                        8,
+                        14
+                    )
+
+                    // Restore saved checkbox state
+                    isChecked =
+                        loadRequirementStatus(
+                            requirement.id
+                        )
+
+                    setOnCheckedChangeListener {
+                            _,
+                            isChecked ->
+
+                        saveRequirementStatus(
+                            requirement.id,
+                            isChecked
+                        )
+
+                        updateProgress()
+                    }
                 }
-            }
 
             checkBoxes.add(checkBox)
-            requirementsChecklistContainer.addView(checkBox)
+
+            requirementsChecklistContainer.addView(
+                checkBox
+            )
         }
 
         updateProgress()
     }
 
-    private fun updateProgress() {
-        val total = checkBoxes.size
-        val completed = checkBoxes.count { it.isChecked }
-        val percentage = if (total == 0) 0 else (completed * 100) / total
+    // =========================================================
+    // UPDATE PROGRESS
+    // =========================================================
 
-        tvProgress.text = "$completed of $total requirements completed"
-        tvPercentage.text = "$percentage%"
-        progressBar.progress = percentage
+    private fun updateProgress() {
+
+        val total =
+            checkBoxes.size
+
+        val completed =
+            checkBoxes.count {
+                it.isChecked
+            }
+
+        val percentage =
+            if (total == 0) {
+                0
+            } else {
+                (completed * 100) / total
+            }
+
+        tvProgress.text =
+            "$completed of $total requirements completed"
+
+        tvPercentage.text =
+            "$percentage%"
+
+        progressBar.progress =
+            percentage
 
         tvCompleteMessage.visibility =
-            if (total > 0 && completed == total) View.VISIBLE
-            else View.GONE
+            if (
+                total > 0 &&
+                completed == total
+            ) {
+                View.VISIBLE
+            } else {
+                View.GONE
+            }
     }
 
-    private fun saveRequirementStatus(index: Int, checked: Boolean) {
-        getSharedPreferences("RequirementChecklistProgress", MODE_PRIVATE)
-            .edit()
-            .putBoolean("${transactionId}_requirement_$index", checked)
-            .apply()
-    }
+    // =========================================================
+    // SAVE CHECKBOX STATE
+    // =========================================================
 
-    private fun loadRequirementStatus(index: Int): Boolean {
-        return getSharedPreferences("RequirementChecklistProgress", MODE_PRIVATE)
-            .getBoolean("${transactionId}_requirement_$index", false)
-    }
+    private fun saveRequirementStatus(
+        requirementId: String,
+        checked: Boolean
+    ) {
 
-    private fun resetChecklist() {
-        val preferences = getSharedPreferences(
+        getSharedPreferences(
             "RequirementChecklistProgress",
             MODE_PRIVATE
         )
+            .edit()
+            .putBoolean(
+                "${transactionId}_requirement_$requirementId",
+                checked
+            )
+            .apply()
+    }
 
-        val editor = preferences.edit()
+    // =========================================================
+    // LOAD CHECKBOX STATE
+    // =========================================================
 
-        checkBoxes.forEachIndexed { index, checkBox ->
-            checkBox.setOnCheckedChangeListener(null)
-            checkBox.isChecked = false
-            editor.remove("${transactionId}_requirement_$index")
+    private fun loadRequirementStatus(
+        requirementId: String
+    ): Boolean {
+
+        return getSharedPreferences(
+            "RequirementChecklistProgress",
+            MODE_PRIVATE
+        )
+            .getBoolean(
+                "${transactionId}_requirement_$requirementId",
+                false
+            )
+    }
+
+    // =========================================================
+    // RESET CHECKLIST
+    // =========================================================
+
+    private fun resetChecklist() {
+
+        val preferences =
+            getSharedPreferences(
+                "RequirementChecklistProgress",
+                MODE_PRIVATE
+            )
+
+        val editor =
+            preferences.edit()
+
+        requirements.forEachIndexed {
+                index,
+                requirement ->
+
+            if (index < checkBoxes.size) {
+
+                val checkBox =
+                    checkBoxes[index]
+
+                checkBox.setOnCheckedChangeListener(
+                    null
+                )
+
+                checkBox.isChecked =
+                    false
+            }
+
+            editor.remove(
+                "${transactionId}_requirement_${requirement.id}"
+            )
         }
 
         editor.apply()

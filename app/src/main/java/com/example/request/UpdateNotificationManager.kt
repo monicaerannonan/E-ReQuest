@@ -1,47 +1,66 @@
 package com.example.request
 
-import android.content.Context
+class UpdateNotificationManager(
+    private val dao: ERequestDao
+) {
 
-class UpdateNotificationManager(private val context: Context) {
+    suspend fun save(
+        notification: UpdateNotification
+    ) {
 
-    private val prefs = context.getSharedPreferences("UpdateNotifications", Context.MODE_PRIVATE)
-
-    fun save(notification: UpdateNotification) {
-        val ids = prefs.getStringSet("ids", emptySet())?.toMutableSet() ?: mutableSetOf()
-        ids.add(notification.id)
-
-        prefs.edit()
-            .putStringSet("ids", ids)
-            .putString("${notification.id}_service", notification.serviceName)
-            .putString("${notification.id}_transactionId", notification.transactionId)
-            .putString("${notification.id}_transaction", notification.transactionName)
-            .putString("${notification.id}_section", notification.updatedSection)
-            .putString("${notification.id}_message", notification.message)
-            .putString("${notification.id}_dateTime", notification.dateTime)
-            .apply()
-    }
-
-    fun getUnread(): List<UpdateNotification> {
-        val ids = prefs.getStringSet("ids", emptySet()) ?: emptySet()
-
-        return ids.filter { !isRead(it) }.map { id ->
-            UpdateNotification(
-                id = id,
-                serviceName = prefs.getString("${id}_service", "") ?: "",
-                transactionId = prefs.getString("${id}_transactionId", "") ?: "",
-                transactionName = prefs.getString("${id}_transaction", "") ?: "",
-                updatedSection = prefs.getString("${id}_section", "") ?: "",
-                message = prefs.getString("${id}_message", "") ?: "",
-                dateTime = prefs.getString("${id}_dateTime", "") ?: ""
+        val entity =
+            UpdateNotificationEntity(
+                id = notification.id,
+                serviceName = notification.serviceName,
+                transactionId = notification.transactionId,
+                transactionName = notification.transactionName,
+                updatedSection = notification.updatedSection,
+                message = notification.message,
+                dateTime = notification.dateTime,
+                isRead = false
             )
-        }
+
+        dao.insertUpdateNotification(
+            entity
+        )
     }
 
-    fun markAsRead(id: String) {
-        prefs.edit().putBoolean("${id}_read", true).apply()
+    suspend fun getUnread():
+            List<UpdateNotification> {
+
+        return dao
+            .getUnreadUpdateNotifications()
+            .map { entity ->
+
+                UpdateNotification(
+                    id = entity.id,
+                    serviceName =
+                        entity.serviceName,
+                    transactionId =
+                        entity.transactionId,
+                    transactionName =
+                        entity.transactionName,
+                    updatedSection =
+                        entity.updatedSection,
+                    message =
+                        entity.message,
+                    dateTime =
+                        entity.dateTime
+                )
+            }
     }
 
-    fun isRead(id: String): Boolean {
-        return prefs.getBoolean("${id}_read", false)
+    suspend fun markAsRead(
+        id: String
+    ) {
+
+        dao.markUpdateNotificationAsRead(
+            id
+        )
+    }
+
+    suspend fun deleteAll() {
+
+        dao.deleteAllUpdateNotifications()
     }
 }
