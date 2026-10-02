@@ -65,6 +65,11 @@ interface ERequestDao {
 
     @Query("""
         SELECT * FROM transactions
+    """)
+    suspend fun getAllTransactionsForSync(): List<TransactionEntity>
+
+    @Query("""
+        SELECT * FROM transactions
         WHERE id = :transactionId
         LIMIT 1
     """)
@@ -97,6 +102,11 @@ interface ERequestDao {
 
     @Query("""
         SELECT * FROM requirements
+    """)
+    suspend fun getAllRequirementsForSync(): List<RequirementEntity>
+
+    @Query("""
+        SELECT * FROM requirements
         WHERE id = :requirementId
         LIMIT 1
     """)
@@ -110,6 +120,14 @@ interface ERequestDao {
     """)
     suspend fun deleteRequirementsByTransaction(
         transactionId: String
+    )
+
+    @Query("""
+        DELETE FROM requirements
+        WHERE id = :requirementId
+    """)
+    suspend fun deleteRequirementById(
+        requirementId: String
     )
 
     @Query("DELETE FROM requirements")
@@ -137,6 +155,11 @@ interface ERequestDao {
 
     @Query("""
         SELECT * FROM procedure_steps
+    """)
+    suspend fun getAllProcedureStepsForSync(): List<ProcedureStepEntity>
+
+    @Query("""
+        SELECT * FROM procedure_steps
         WHERE id = :stepId
         LIMIT 1
     """)
@@ -150,6 +173,14 @@ interface ERequestDao {
     """)
     suspend fun deleteProcedureStepsByTransaction(
         transactionId: String
+    )
+
+    @Query("""
+        DELETE FROM procedure_steps
+        WHERE id = :stepId
+    """)
+    suspend fun deleteProcedureStepById(
+        stepId: String
     )
 
     @Query("DELETE FROM procedure_steps")
@@ -176,11 +207,25 @@ interface ERequestDao {
     ): List<DepartmentGuidelineEntity>
 
     @Query("""
+        SELECT * FROM department_guidelines
+    """)
+    suspend fun getAllDepartmentGuidelinesForSync():
+            List<DepartmentGuidelineEntity>
+
+    @Query("""
         DELETE FROM department_guidelines
         WHERE transactionId = :transactionId
     """)
     suspend fun deleteDepartmentGuidelinesByTransaction(
         transactionId: String
+    )
+
+    @Query("""
+        DELETE FROM department_guidelines
+        WHERE id = :guidelineId
+    """)
+    suspend fun deleteDepartmentGuidelineById(
+        guidelineId: String
     )
 
     @Query("DELETE FROM department_guidelines")
@@ -213,17 +258,12 @@ interface ERequestDao {
         announcementId: String
     ): AnnouncementEntity?
 
-
-    // Get ALL announcements including inactive records.
-    // Used during Firestore synchronization.
     @Query("""
         SELECT * FROM announcements
     """)
     suspend fun getAllAnnouncements():
             List<AnnouncementEntity>
 
-
-    // Delete one specific announcement from Room.
     @Query("""
         DELETE FROM announcements
         WHERE id = :announcementId
@@ -231,7 +271,6 @@ interface ERequestDao {
     suspend fun deleteAnnouncementById(
         announcementId: String
     )
-
 
     @Query("DELETE FROM announcements")
     suspend fun deleteAllAnnouncements()

@@ -227,12 +227,22 @@
                 HOME UPDATE CARDS WILL BE GENERATED HERE
             -->
 
-            <LinearLayout
-                android:id="@+id/updateNotificationsContainer"
+            <ScrollView
+                android:id="@+id/updateNotificationsScrollView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:orientation="vertical" />
+                android:fillViewport="false"
+                android:overScrollMode="ifContentScrolls"
+                android:scrollbars="vertical">
+
+                <LinearLayout
+                    android:id="@+id/updateNotificationsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </ScrollView>
 
 
             <!-- SHOWN IF ALL UPDATES ARE READ -->
@@ -249,33 +259,6 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp"
                 android:visibility="gone" />
-
-
-            <!-- ================================================= -->
-            <!-- TEMPORARY TEST BUTTON -->
-            <!-- ================================================= -->
-
-            <Button
-                android:id="@+id/btnTestNotification"
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:layout_marginTop="16dp"
-                android:backgroundTint="@color/primary"
-                android:text="Test Update Notification"
-                android:textAllCaps="false"
-                android:textColor="@color/text_white"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-
-            <!--
-                TEMPORARY ONLY.
-
-                Later:
-                Admin update -> database -> student app
-
-                Then this button can be removed.
-            -->
 
 
             <!-- ================================================= -->
@@ -301,12 +284,22 @@
                 android:textSize="13sp" />
 
 
-            <LinearLayout
-                android:id="@+id/importantAnnouncementsContainer"
+            <ScrollView
+                android:id="@+id/importantAnnouncementsScrollView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:orientation="vertical" />
+                android:fillViewport="false"
+                android:overScrollMode="ifContentScrolls"
+                android:scrollbars="vertical">
+
+                <LinearLayout
+                    android:id="@+id/importantAnnouncementsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+            </ScrollView>
 
 
             <TextView

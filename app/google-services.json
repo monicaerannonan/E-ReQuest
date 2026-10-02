@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "860074115460",
+    "project_id": "e-resquest",
+    "storage_bucket": "e-resquest.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:860074115460:android:6b4f9698c3412f65b11dd1",
+        "android_client_info": {
+          "package_name": "com.example.request"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1TXnBLOY7ZpjYNyd6cfU2r3oxP0szfaw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

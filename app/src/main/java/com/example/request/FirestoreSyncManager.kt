@@ -32,17 +32,46 @@ class FirestoreSyncManager(
 
     suspend fun syncAllData() {
 
+        // Sync services first so transaction notifications can
+        // resolve the correct service name.
         syncServices()
 
-        syncTransactions()
+        // Collect every transaction affected during this sync.
+        // A MutableSet guarantees one notification per transaction,
+        // even when several sections were changed.
+        val affectedTransactionIds =
+            mutableSetOf<String>()
 
-        syncRequirements()
+        affectedTransactionIds.addAll(
+            syncTransactions()
+        )
 
-        syncProcedureSteps()
+        affectedTransactionIds.addAll(
+            syncRequirements()
+        )
 
-        syncDepartmentGuidelines()
+        affectedTransactionIds.addAll(
+            syncProcedureSteps()
+        )
+
+        affectedTransactionIds.addAll(
+            syncDepartmentGuidelines()
+        )
 
         syncAnnouncements()
+
+        // Create exactly ONE unread notification for each
+        // affected school transaction.
+        affectedTransactionIds.forEach {
+                transactionId ->
+
+            createTransactionUpdateNotification(
+                transactionId = transactionId,
+                updatedSection = "transaction",
+                message =
+                    "Recent information for this transaction has been updated."
+            )
+        }
     }
 
 
@@ -108,7 +137,7 @@ class FirestoreSyncManager(
     // TRANSACTIONS
     // =====================================================
 
-    private suspend fun syncTransactions() {
+    private suspend fun syncTransactions(): Set<String> {
 
         val snapshot =
             firestore
@@ -116,112 +145,42 @@ class FirestoreSyncManager(
                 .get()
                 .await()
 
+        val changedTransactionIds =
+            mutableSetOf<String>()
+
         val transactions =
             snapshot.documents.mapNotNull { document ->
 
                 try {
 
-                    TransactionEntity(
-                        id = document.id,
-
-                        serviceId =
-                            document.getString(
-                                "serviceId"
-                            ) ?: "",
-
-                        name =
-                            document.getString(
-                                "name"
-                            ) ?: "",
-
-                        description =
-                            document.getString(
-                                "description"
-                            ) ?: "",
-
-                        officeName =
-                            document.getString(
-                                "officeName"
-                            ) ?: "",
-
-                        officeSchedule =
-                            document.getString(
-                                "officeSchedule"
-                            ) ?: "",
-
-                        isActive =
-                            document.getBoolean(
-                                "isActive"
-                            ) ?: true,
-
-                        updatedAt =
-                            document.getLong(
-                                "updatedAt"
-                            )
-                                ?: document
-                                    .getTimestamp(
-                                        "updatedAt"
-                                    )
-                                    ?.toDate()
-                                    ?.time
-                                ?: 0L
-                    )
-
-                } catch (e: Exception) {
-
-                    e.printStackTrace()
-
-                    null
-                }
-            }
-
-        if (transactions.isNotEmpty()) {
-
-            dao.insertTransactions(
-                transactions
-            )
-        }
-    }
-
-
-    // =====================================================
-    // REQUIREMENTS
-    // =====================================================
-
-    private suspend fun syncRequirements() {
-
-        val snapshot =
-            firestore
-                .collection("requirements")
-                .get()
-                .await()
-
-        val changedTransactionIds =
-            mutableSetOf<String>()
-
-        val requirements =
-            snapshot.documents.mapNotNull { document ->
-
-                try {
-
-                    val newRequirement =
-                        RequirementEntity(
+                    val newTransaction =
+                        TransactionEntity(
                             id = document.id,
 
-                            transactionId =
+                            serviceId =
                                 document.getString(
-                                    "transactionId"
+                                    "serviceId"
                                 ) ?: "",
 
-                            requirementText =
+                            name =
                                 document.getString(
-                                    "requirementText"
+                                    "name"
                                 ) ?: "",
 
-                            displayOrder =
-                                document.getLong(
-                                    "displayOrder"
-                                )?.toInt() ?: 0,
+                            description =
+                                document.getString(
+                                    "description"
+                                ) ?: "",
+
+                            officeName =
+                                document.getString(
+                                    "officeName"
+                                ) ?: "",
+
+                            officeSchedule =
+                                document.getString(
+                                    "officeSchedule"
+                                ) ?: "",
 
                             isActive =
                                 document.getBoolean(
@@ -241,43 +200,44 @@ class FirestoreSyncManager(
                                     ?: 0L
                         )
 
-
-                    val oldRequirement =
-                        dao.getRequirement(
-                            newRequirement.id
+                    val oldTransaction =
+                        dao.getTransaction(
+                            newTransaction.id
                         )
 
-
-                    if (oldRequirement != null) {
+                    if (oldTransaction != null) {
 
                         val hasChanged =
-                            oldRequirement.requirementText !=
-                                    newRequirement.requirementText ||
+                            oldTransaction.serviceId !=
+                                    newTransaction.serviceId ||
 
-                                    oldRequirement.displayOrder !=
-                                    newRequirement.displayOrder ||
+                                    oldTransaction.name !=
+                                    newTransaction.name ||
 
-                                    oldRequirement.isActive !=
-                                    newRequirement.isActive ||
+                                    oldTransaction.description !=
+                                    newTransaction.description ||
 
-                                    oldRequirement.updatedAt !=
-                                    newRequirement.updatedAt
+                                    oldTransaction.officeName !=
+                                    newTransaction.officeName ||
 
+                                    oldTransaction.officeSchedule !=
+                                    newTransaction.officeSchedule ||
 
-                        if (
-                            hasChanged &&
-                            newRequirement.transactionId
-                                .isNotBlank()
-                        ) {
+                                    oldTransaction.isActive !=
+                                    newTransaction.isActive ||
+
+                                    oldTransaction.updatedAt !=
+                                    newTransaction.updatedAt
+
+                        if (hasChanged) {
 
                             changedTransactionIds.add(
-                                newRequirement.transactionId
+                                newTransaction.id
                             )
                         }
                     }
 
-
-                    newRequirement
+                    newTransaction
 
                 } catch (e: Exception) {
 
@@ -287,6 +247,146 @@ class FirestoreSyncManager(
                 }
             }
 
+        if (transactions.isNotEmpty()) {
+
+            dao.insertTransactions(
+                transactions
+            )
+        }
+
+        return changedTransactionIds
+    }
+
+
+    // =====================================================
+    // REQUIREMENTS
+    // =====================================================
+
+    private suspend fun syncRequirements(): Set<String> {
+
+        val localBeforeSync =
+            dao.getAllRequirementsForSync()
+
+        val hadLocalData =
+            localBeforeSync.isNotEmpty()
+
+        val localById =
+            localBeforeSync.associateBy {
+                it.id
+            }
+
+        val snapshot =
+            firestore
+                .collection("requirements")
+                .get()
+                .await()
+
+        val firestoreIds =
+            snapshot.documents
+                .map { it.id }
+                .toSet()
+
+        val changedTransactionIds =
+            mutableSetOf<String>()
+
+        val requirements =
+            snapshot.documents.mapNotNull { document ->
+
+                try {
+
+                    val newRequirement =
+                        RequirementEntity(
+                            id = document.id,
+                            transactionId =
+                                document.getString("transactionId") ?: "",
+                            requirementText =
+                                document.getString("requirementText") ?: "",
+                            displayOrder =
+                                document.getLong("displayOrder")?.toInt() ?: 0,
+                            isActive =
+                                document.getBoolean("isActive") ?: true,
+                            updatedAt =
+                                document.getLong("updatedAt")
+                                    ?: document.getTimestamp("updatedAt")
+                                        ?.toDate()?.time
+                                    ?: 0L
+                        )
+
+                    val oldRequirement =
+                        localById[newRequirement.id]
+
+                    if (hadLocalData) {
+
+                        val isAdded =
+                            oldRequirement == null
+
+                        val isChanged =
+                            oldRequirement != null &&
+                                    (
+                                            oldRequirement.transactionId !=
+                                                    newRequirement.transactionId ||
+                                                    oldRequirement.requirementText !=
+                                                    newRequirement.requirementText ||
+                                                    oldRequirement.displayOrder !=
+                                                    newRequirement.displayOrder ||
+                                                    oldRequirement.isActive !=
+                                                    newRequirement.isActive ||
+                                                    oldRequirement.updatedAt !=
+                                                    newRequirement.updatedAt
+                                            )
+
+                        if (isAdded || isChanged) {
+
+                            if (
+                                oldRequirement != null &&
+                                oldRequirement.transactionId.isNotBlank()
+                            ) {
+                                changedTransactionIds.add(
+                                    oldRequirement.transactionId
+                                )
+                            }
+
+                            if (
+                                newRequirement.transactionId.isNotBlank()
+                            ) {
+                                changedTransactionIds.add(
+                                    newRequirement.transactionId
+                                )
+                            }
+                        }
+                    }
+
+                    newRequirement
+
+                } catch (e: Exception) {
+
+                    e.printStackTrace()
+                    null
+                }
+            }
+
+        if (hadLocalData) {
+
+            localBeforeSync
+                .filter {
+                    it.id !in firestoreIds
+                }
+                .forEach { deletedRequirement ->
+
+                    if (
+                        deletedRequirement.transactionId
+                            .isNotBlank()
+                    ) {
+                        changedTransactionIds.add(
+                            deletedRequirement.transactionId
+                        )
+                    }
+
+                    dao.deleteRequirementById(
+                        deletedRequirement.id
+                    )
+                }
+        }
 
         if (requirements.isNotEmpty()) {
 
@@ -295,14 +395,7 @@ class FirestoreSyncManager(
             )
         }
 
-
-        changedTransactionIds.forEach {
-                transactionId ->
-
-            createRequirementsUpdatedNotification(
-                transactionId
-            )
-        }
+        return changedTransactionIds
     }
 
 
@@ -314,6 +407,25 @@ class FirestoreSyncManager(
         transactionId: String
     ) {
 
+        createTransactionUpdateNotification(
+            transactionId = transactionId,
+            updatedSection = "requirements",
+            message =
+                "The requirements for this transaction have been updated."
+        )
+    }
+
+
+    // =====================================================
+    // GENERIC TRANSACTION UPDATE NOTIFICATION
+    // =====================================================
+
+    private suspend fun createTransactionUpdateNotification(
+        transactionId: String,
+        updatedSection: String,
+        message: String
+    ) {
+
         try {
 
             val transaction =
@@ -321,21 +433,17 @@ class FirestoreSyncManager(
                     transactionId
                 ) ?: return
 
-
             val service =
                 dao.getService(
                     transaction.serviceId
                 )
 
-
             val serviceName =
                 service?.name
                     ?: transaction.officeName
 
-
             val currentTime =
                 System.currentTimeMillis()
-
 
             val formattedDate =
                 SimpleDateFormat(
@@ -345,42 +453,21 @@ class FirestoreSyncManager(
                     Date(currentTime)
                 )
 
-
             val notificationId =
-                "requirements_${transactionId}_$currentTime"
-
+                "${updatedSection}_${transactionId}_$currentTime"
 
             val notification =
                 UpdateNotificationEntity(
-
-                    id =
-                        notificationId,
-
-                    serviceName =
-                        serviceName,
-
-                    transactionId =
-                        transaction.id,
-
-                    transactionName =
-                        transaction.name,
-
-                    updatedSection =
-                        "requirements",
-
-                    message =
-                        "The requirements for this transaction have been updated.",
-
-                    dateTime =
-                        formattedDate,
-
-                    isRead =
-                        false,
-
-                    createdAt =
-                        currentTime
+                    id = notificationId,
+                    serviceName = serviceName,
+                    transactionId = transaction.id,
+                    transactionName = transaction.name,
+                    updatedSection = updatedSection,
+                    message = message,
+                    dateTime = formattedDate,
+                    isRead = false,
+                    createdAt = currentTime
                 )
-
 
             dao.insertUpdateNotification(
                 notification
@@ -397,13 +484,32 @@ class FirestoreSyncManager(
     // PROCEDURE STEPS
     // =====================================================
 
-    private suspend fun syncProcedureSteps() {
+    private suspend fun syncProcedureSteps(): Set<String> {
+
+        val localBeforeSync =
+            dao.getAllProcedureStepsForSync()
+
+        val hadLocalData =
+            localBeforeSync.isNotEmpty()
+
+        val localById =
+            localBeforeSync.associateBy {
+                it.id
+            }
 
         val snapshot =
             firestore
                 .collection("procedure_steps")
                 .get()
                 .await()
+
+        val firestoreIds =
+            snapshot.documents
+                .map { it.id }
+                .toSet()
+
+        val changedTransactionIds =
+            mutableSetOf<String>()
 
 
         val steps =
@@ -505,9 +611,7 @@ class FirestoreSyncManager(
                     // -----------------------------------------
 
                     val oldStep =
-                        dao.getProcedureStep(
-                            stepId
-                        )
+                        localById[stepId]
 
 
                     // -----------------------------------------
@@ -629,6 +733,48 @@ class FirestoreSyncManager(
 
 
                     // -----------------------------------------
+                    // DETECT PROCEDURE CHANGES
+                    // -----------------------------------------
+
+                    if (hadLocalData) {
+
+                        val isAdded =
+                            oldStep == null
+
+                        val hasChanged =
+                            oldStep != null && (
+                                    oldStep.transactionId != transactionId ||
+                                            oldStep.stepNumber != stepNumber ||
+                                            oldStep.instruction != instruction ||
+                                            oldStep.remoteImageUrl != remoteImageUrl ||
+                                            oldStep.imageCaption != imageCaption ||
+                                            oldStep.websiteName != websiteName ||
+                                            oldStep.websiteUrl != websiteUrl ||
+                                            oldStep.isActive != isActive ||
+                                            oldStep.updatedAt != updatedAt
+                                    )
+
+                        if (isAdded || hasChanged) {
+
+                            if (
+                                oldStep != null &&
+                                oldStep.transactionId.isNotBlank()
+                            ) {
+                                changedTransactionIds.add(
+                                    oldStep.transactionId
+                                )
+                            }
+
+                            if (transactionId.isNotBlank()) {
+                                changedTransactionIds.add(
+                                    transactionId
+                                )
+                            }
+                        }
+                    }
+
+
+                    // -----------------------------------------
                     // CREATE ROOM ENTITY
                     // -----------------------------------------
 
@@ -681,12 +827,47 @@ class FirestoreSyncManager(
         // SAVE PROCEDURE STEPS TO ROOM
         // ---------------------------------------------
 
+        if (hadLocalData) {
+
+            localBeforeSync
+                .filter {
+                    it.id !in firestoreIds
+                }
+                .forEach { deletedStep ->
+
+                    if (
+                        deletedStep.transactionId
+                            .isNotBlank()
+                    ) {
+                        changedTransactionIds.add(
+                            deletedStep.transactionId
+                        )
+                    }
+
+                    deletedStep.localImagePath
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { path ->
+                            try {
+                                File(path).delete()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+
+                    dao.deleteProcedureStepById(
+                        deletedStep.id
+                    )
+                }
+        }
+
         if (steps.isNotEmpty()) {
 
             dao.insertProcedureSteps(
                 steps
             )
         }
+
+        return changedTransactionIds
     }
 
 
@@ -847,7 +1028,18 @@ class FirestoreSyncManager(
     // DEPARTMENT GUIDELINES
     // =====================================================
 
-    private suspend fun syncDepartmentGuidelines() {
+    private suspend fun syncDepartmentGuidelines(): Set<String> {
+
+        val localBeforeSync =
+            dao.getAllDepartmentGuidelinesForSync()
+
+        val hadLocalData =
+            localBeforeSync.isNotEmpty()
+
+        val localById =
+            localBeforeSync.associateBy {
+                it.id
+            }
 
         val snapshot =
             firestore
@@ -857,6 +1049,13 @@ class FirestoreSyncManager(
                 .get()
                 .await()
 
+        val firestoreIds =
+            snapshot.documents
+                .map { it.id }
+                .toSet()
+
+        val changedTransactionIds =
+            mutableSetOf<String>()
 
         val guidelines =
             snapshot.documents.mapNotNull {
@@ -864,52 +1063,112 @@ class FirestoreSyncManager(
 
                 try {
 
-                    DepartmentGuidelineEntity(
-
-                        id =
-                            document.id,
-
-                        transactionId =
-                            document.getString(
-                                "transactionId"
-                            ) ?: "",
-
-                        guidelineText =
-                            document.getString(
-                                "guidelineText"
-                            ) ?: "",
-
-                        displayOrder =
-                            document.getLong(
-                                "displayOrder"
-                            )?.toInt() ?: 0,
-
-                        isActive =
-                            document.getBoolean(
-                                "isActive"
-                            ) ?: true,
-
-                        updatedAt =
-                            document.getLong(
-                                "updatedAt"
-                            )
-                                ?: document
-                                    .getTimestamp(
+                    val newGuideline =
+                        DepartmentGuidelineEntity(
+                            id = document.id,
+                            transactionId =
+                                document.getString(
+                                    "transactionId"
+                                ) ?: "",
+                            guidelineText =
+                                document.getString(
+                                    "guidelineText"
+                                ) ?: "",
+                            displayOrder =
+                                document.getLong(
+                                    "displayOrder"
+                                )?.toInt() ?: 0,
+                            isActive =
+                                document.getBoolean(
+                                    "isActive"
+                                ) ?: true,
+                            updatedAt =
+                                document.getLong(
+                                    "updatedAt"
+                                )
+                                    ?: document.getTimestamp(
                                         "updatedAt"
-                                    )
-                                    ?.toDate()
-                                    ?.time
-                                ?: 0L
-                    )
+                                    )?.toDate()?.time
+                                    ?: 0L
+                        )
+
+                    val oldGuideline =
+                        localById[newGuideline.id]
+
+                    if (hadLocalData) {
+
+                        val isAdded =
+                            oldGuideline == null
+
+                        val isChanged =
+                            oldGuideline != null &&
+                                    (
+                                            oldGuideline.transactionId !=
+                                                    newGuideline.transactionId ||
+                                                    oldGuideline.guidelineText !=
+                                                    newGuideline.guidelineText ||
+                                                    oldGuideline.displayOrder !=
+                                                    newGuideline.displayOrder ||
+                                                    oldGuideline.isActive !=
+                                                    newGuideline.isActive ||
+                                                    oldGuideline.updatedAt !=
+                                                    newGuideline.updatedAt
+                                            )
+
+                        if (isAdded || isChanged) {
+
+                            if (
+                                oldGuideline != null &&
+                                oldGuideline.transactionId
+                                    .isNotBlank()
+                            ) {
+                                changedTransactionIds.add(
+                                    oldGuideline.transactionId
+                                )
+                            }
+
+                            if (
+                                newGuideline.transactionId
+                                    .isNotBlank()
+                            ) {
+                                changedTransactionIds.add(
+                                    newGuideline.transactionId
+                                )
+                            }
+                        }
+                    }
+
+                    newGuideline
 
                 } catch (e: Exception) {
 
                     e.printStackTrace()
-
                     null
                 }
             }
 
+        if (hadLocalData) {
+
+            localBeforeSync
+                .filter {
+                    it.id !in firestoreIds
+                }
+                .forEach { deletedGuideline ->
+
+                    if (
+                        deletedGuideline.transactionId
+                            .isNotBlank()
+                    ) {
+                        changedTransactionIds.add(
+                            deletedGuideline.transactionId
+                        )
+                    }
+
+                    dao.deleteDepartmentGuidelineById(
+                        deletedGuideline.id
+                    )
+                }
+        }
 
         if (guidelines.isNotEmpty()) {
 
@@ -917,6 +1176,8 @@ class FirestoreSyncManager(
                 guidelines
             )
         }
+
+        return changedTransactionIds
     }
 
 

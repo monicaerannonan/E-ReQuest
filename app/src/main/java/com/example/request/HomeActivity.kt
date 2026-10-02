@@ -1,5 +1,13 @@
 package com.example.request
 
+import android.Manifest
+import android.app.PendingIntent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
@@ -11,10 +19,12 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -28,6 +38,17 @@ import java.util.Locale
 
 class HomeActivity : AppCompatActivity() {
 
+    private val notificationPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
+
+    // IDs already shown as Android system notifications during this activity session.
+    private val shownSystemNotificationIds =
+        mutableSetOf<String>()
+
+
+
     // =====================================================
     // XML VIEWS
     // =====================================================
@@ -39,10 +60,12 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var etSearch: EditText
     private lateinit var searchResultsContainer: LinearLayout
 
+    private lateinit var updateNotificationsScrollView: ScrollView
     private lateinit var updateNotificationsContainer: LinearLayout
     private lateinit var tvNoUpdateNotifications: TextView
     private lateinit var tvNotificationCount: TextView
 
+    private lateinit var importantAnnouncementsScrollView: ScrollView
     private lateinit var importantAnnouncementsContainer: LinearLayout
     private lateinit var tvNoImportantAnnouncements: TextView
 
@@ -64,6 +87,18 @@ class HomeActivity : AppCompatActivity() {
     // =====================================================
 
     private lateinit var firestoreSyncManager: FirestoreSyncManager
+
+    // =====================================================
+    // NETWORK MONITOR
+    // =====================================================
+
+    private lateinit var networkMonitor: NetworkMonitor
+
+    // =====================================================
+    // FIRESTORE REAL-TIME LISTENER
+    // =====================================================
+
+    private lateinit var firestoreUpdateListener: FirestoreUpdateListener
 
     // =====================================================
     // SEARCH DATA
@@ -90,6 +125,8 @@ class HomeActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_home)
 
+        requestNotificationPermissionIfNeeded()
+
         // =================================================
         // CONNECT XML
         // =================================================
@@ -109,6 +146,9 @@ class HomeActivity : AppCompatActivity() {
         searchResultsContainer =
             findViewById(R.id.searchResultsContainer)
 
+        updateNotificationsScrollView =
+            findViewById(R.id.updateNotificationsScrollView)
+
         updateNotificationsContainer =
             findViewById(R.id.updateNotificationsContainer)
 
@@ -117,6 +157,9 @@ class HomeActivity : AppCompatActivity() {
 
         tvNotificationCount =
             findViewById(R.id.tvNotificationCount)
+
+        importantAnnouncementsScrollView =
+            findViewById(R.id.importantAnnouncementsScrollView)
 
         importantAnnouncementsContainer =
             findViewById(R.id.importantAnnouncementsContainer)
@@ -162,6 +205,46 @@ class HomeActivity : AppCompatActivity() {
             FirestoreSyncManager(
                 applicationContext
             )
+
+        // =================================================
+        // AUTOMATIC ONLINE MONITOR
+        // =================================================
+
+        networkMonitor =
+            NetworkMonitor(this) {
+
+                runOnUiThread {
+
+                    updateConnectionStatus()
+
+                    if (!isSyncing) {
+                        syncData()
+                    }
+                }
+            }
+
+        networkMonitor.start()
+
+        // =================================================
+        // FIRESTORE REAL-TIME UPDATE LISTENER
+        // =================================================
+
+        firestoreUpdateListener =
+            FirestoreUpdateListener {
+
+                runOnUiThread {
+
+                    if (
+                        isInternetAvailable() &&
+                        !isSyncing
+                    ) {
+
+                        syncData()
+                    }
+                }
+            }
+
+        firestoreUpdateListener.start()
 
         // =================================================
         // LOAD SAVED ROOM DATA
@@ -593,6 +676,10 @@ class HomeActivity : AppCompatActivity() {
                         updateManager.getUnread()
                     }
 
+                showNewSystemNotifications(
+                    updates
+                )
+
                 updateNotificationsContainer
                     .removeAllViews()
 
@@ -842,6 +929,12 @@ class HomeActivity : AppCompatActivity() {
                         )
                 }
 
+                updateScrollableSectionHeight(
+                    scrollView = updateNotificationsScrollView,
+                    container = updateNotificationsContainer,
+                    visibleItemCount = 3
+                )
+
             } catch (e: Exception) {
 
                 e.printStackTrace()
@@ -925,6 +1018,10 @@ class HomeActivity : AppCompatActivity() {
 
                     tvNoImportantAnnouncements.visibility =
                         View.VISIBLE
+
+                    resetScrollableSectionHeight(
+                        importantAnnouncementsScrollView
+                    )
 
                     return@launch
                 }
@@ -1098,6 +1195,12 @@ class HomeActivity : AppCompatActivity() {
                             card
                         )
                 }
+
+                updateScrollableSectionHeight(
+                    scrollView = importantAnnouncementsScrollView,
+                    container = importantAnnouncementsContainer,
+                    visibleItemCount = 3
+                )
 
             } catch (e: Exception) {
 
@@ -1357,6 +1460,229 @@ class HomeActivity : AppCompatActivity() {
     }
 
     // =====================================================
+    // ANDROID SYSTEM NOTIFICATIONS
+    // =====================================================
+
+    private fun requestNotificationPermissionIfNeeded() {
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
+    }
+
+
+    private fun showNewSystemNotifications(
+        updates: List<UpdateNotification>
+    ) {
+
+        updates.forEach { update ->
+
+            if (
+                shownSystemNotificationIds.add(
+                    update.id
+                )
+            ) {
+                showSystemNotification(
+                    update
+                )
+            }
+        }
+    }
+
+
+    private fun showSystemNotification(
+        update: UpdateNotification
+    ) {
+
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        val intent =
+            Intent(
+                this,
+                TransactionDetailsActivity::class.java
+            ).apply {
+
+                putExtra(
+                    "TRANSACTION_ID",
+                    update.transactionId
+                )
+
+                putExtra(
+                    "TRANSACTION_NAME",
+                    update.transactionName
+                )
+
+                putExtra(
+                    "SERVICE_NAME",
+                    update.serviceName
+                )
+
+                putExtra(
+                    "TARGET_SECTION",
+                    update.updatedSection
+                )
+
+                flags =
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                            Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+
+        val pendingIntent =
+            PendingIntent.getActivity(
+                this,
+                update.id.hashCode(),
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or
+                        PendingIntent.FLAG_IMMUTABLE
+            )
+
+        val notification =
+            NotificationCompat.Builder(
+                this,
+                ERequestApplication.UPDATES_CHANNEL_ID
+            )
+                .setSmallIcon(
+                    R.mipmap.ic_launcher
+                )
+                .setContentTitle(
+                    update.transactionName
+                        .ifBlank {
+                            "E-Request Update"
+                        }
+                )
+                .setContentText(
+                    update.message
+                )
+                .setStyle(
+                    NotificationCompat
+                        .BigTextStyle()
+                        .bigText(
+                            update.message
+                        )
+                )
+                .setPriority(
+                    NotificationCompat.PRIORITY_HIGH
+                )
+                .setCategory(
+                    NotificationCompat.CATEGORY_STATUS
+                )
+                .setAutoCancel(true)
+                .setContentIntent(
+                    pendingIntent
+                )
+                .build()
+
+        NotificationManagerCompat
+            .from(this)
+            .notify(
+                update.id.hashCode(),
+                notification
+            )
+    }
+
+
+    // =====================================================
+    // LIMIT HOME SECTIONS TO 3 VISIBLE CARDS
+    // =====================================================
+
+    private fun updateScrollableSectionHeight(
+        scrollView: ScrollView,
+        container: LinearLayout,
+        visibleItemCount: Int
+    ) {
+
+        container.post {
+
+            if (container.childCount <= visibleItemCount) {
+
+                resetScrollableSectionHeight(
+                    scrollView
+                )
+
+                return@post
+            }
+
+            var targetHeight = 0
+
+            for (index in 0 until visibleItemCount) {
+
+                val child =
+                    container.getChildAt(index)
+
+                if (child.measuredHeight == 0) {
+
+                    child.measure(
+                        View.MeasureSpec.makeMeasureSpec(
+                            container.width,
+                            View.MeasureSpec.EXACTLY
+                        ),
+                        View.MeasureSpec.makeMeasureSpec(
+                            0,
+                            View.MeasureSpec.UNSPECIFIED
+                        )
+                    )
+                }
+
+                targetHeight +=
+                    child.measuredHeight
+
+                val params =
+                    child.layoutParams
+
+                if (
+                    params is ViewGroup.MarginLayoutParams
+                ) {
+
+                    targetHeight +=
+                        params.topMargin +
+                                params.bottomMargin
+                }
+            }
+
+            scrollView.layoutParams =
+                scrollView.layoutParams.apply {
+
+                    height =
+                        targetHeight
+                }
+
+            scrollView.requestLayout()
+        }
+    }
+
+
+    private fun resetScrollableSectionHeight(
+        scrollView: ScrollView
+    ) {
+
+        scrollView.layoutParams =
+            scrollView.layoutParams.apply {
+
+                height =
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+
+        scrollView.requestLayout()
+    }
+
+
+    // =====================================================
     // DP HELPER
     // =====================================================
 
@@ -1377,6 +1703,14 @@ class HomeActivity : AppCompatActivity() {
     override fun onDestroy() {
 
         syncAnimator?.cancel()
+
+        if (::networkMonitor.isInitialized) {
+            networkMonitor.stop()
+        }
+
+        if (::firestoreUpdateListener.isInitialized) {
+            firestoreUpdateListener.stop()
+        }
 
         super.onDestroy()
     }

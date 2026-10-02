@@ -18,7 +18,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner =
+            "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -30,36 +31,112 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility =
+            JavaVersion.VERSION_11
+
+        targetCompatibility =
+            JavaVersion.VERSION_11
     }
 }
 
 dependencies {
 
-    // AndroidX
-    implementation(libs.androidx.activity.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.constraintlayout)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.material)
+    // =====================================================
+    // ANDROIDX
+    // =====================================================
 
-    // Room Database - Local / Offline Database
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+    implementation(
+        libs.androidx.activity.ktx
+    )
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:34.9.0"))
+    implementation(
+        libs.androidx.appcompat
+    )
 
-    // Cloud Firestore - Online Database
-    implementation("com.google.firebase:firebase-firestore")
+    implementation(
+        libs.androidx.constraintlayout
+    )
 
-    // Firebase Authentication - Admin Login
-    implementation("com.google.firebase:firebase-auth")
+    implementation(
+        libs.androidx.core.ktx
+    )
 
-    // Testing
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
+    implementation(
+        libs.material
+    )
+
+
+    // =====================================================
+    // ROOM DATABASE
+    // LOCAL / OFFLINE DATABASE
+    // =====================================================
+
+    implementation(
+        libs.androidx.room.runtime
+    )
+
+    implementation(
+        libs.androidx.room.ktx
+    )
+
+    ksp(
+        libs.androidx.room.compiler
+    )
+
+
+    // =====================================================
+    // FIREBASE BOM
+    // =====================================================
+
+    implementation(
+        platform(
+            "com.google.firebase:firebase-bom:34.9.0"
+        )
+    )
+
+
+    // =====================================================
+    // CLOUD FIRESTORE
+    // ONLINE DATABASE
+    // =====================================================
+
+    implementation(
+        "com.google.firebase:firebase-firestore"
+    )
+
+
+    // =====================================================
+    // FIREBASE AUTHENTICATION
+    // =====================================================
+
+    implementation(
+        "com.google.firebase:firebase-auth"
+    )
+
+
+    // =====================================================
+    // FIREBASE CLOUD MESSAGING
+    // PUSH NOTIFICATIONS
+    // =====================================================
+
+    implementation(
+        "com.google.firebase:firebase-messaging"
+    )
+
+
+    // =====================================================
+    // TESTING
+    // =====================================================
+
+    testImplementation(
+        libs.junit
+    )
+
+    androidTestImplementation(
+        libs.androidx.espresso.core
+    )
+
+    androidTestImplementation(
+        libs.androidx.junit
+    )
 }
