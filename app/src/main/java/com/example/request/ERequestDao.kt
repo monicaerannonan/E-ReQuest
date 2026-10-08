@@ -33,6 +33,19 @@ interface ERequestDao {
         serviceId: String
     ): ServiceEntity?
 
+    @Query("""
+        SELECT * FROM services
+    """)
+    suspend fun getAllServicesForSync(): List<ServiceEntity>
+
+    @Query("""
+        DELETE FROM services
+        WHERE id = :serviceId
+    """)
+    suspend fun deleteServiceById(
+        serviceId: String
+    )
+
     @Query("DELETE FROM services")
     suspend fun deleteAllServices()
 

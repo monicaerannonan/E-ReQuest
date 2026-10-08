@@ -1,6 +1,9 @@
 package com.example.request
 
 import android.content.Context
+import android.util.Log
+import androidx.room.withTransaction
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
@@ -20,10 +23,42 @@ class FirestoreSyncManager(
     private val firestore =
         FirebaseFirestore.getInstance()
 
-    private val dao =
+    private val database =
         ERequestDatabase
             .getDatabase(context.applicationContext)
-            .eRequestDao()
+
+    private val dao =
+        database.eRequestDao()
+
+    private val parsingErrors =
+        mutableListOf<String>()
+
+    private fun recordParsingError(collection: String, docId: String, e: Exception) {
+        val msg = "Failed to parse document '$docId' in '$collection': ${e.message}"
+        Log.e("FirestoreSyncManager", msg, e)
+        parsingErrors.add(msg)
+    }
+
+    private fun readTimestampMillis(
+        document: DocumentSnapshot,
+        field: String
+    ): Long? {
+        return when (val value = document.get(field)) {
+            is Number -> value.toLong()
+            is com.google.firebase.Timestamp ->
+                value.toDate().time
+            is java.util.Date -> value.time
+            else -> {
+                if (document.contains(field) && value != null) {
+                    Log.w(
+                        "FirestoreSyncManager",
+                        "Unrecognized timestamp format for field '$field' in document '${document.id}': ${value::class.java.name}"
+                    )
+                }
+                null
+            }
+        }
+    }
 
 
     // =====================================================
@@ -31,6 +66,8 @@ class FirestoreSyncManager(
     // =====================================================
 
     suspend fun syncAllData() {
+
+        parsingErrors.clear()
 
         // Sync services first so transaction notifications can
         // resolve the correct service name.
@@ -72,6 +109,13 @@ class FirestoreSyncManager(
                     "Recent information for this transaction has been updated."
             )
         }
+
+        if (parsingErrors.isNotEmpty()) {
+            throw IllegalStateException(
+                "Synchronization completed with ${parsingErrors.size} document parsing error(s):\n" +
+                        parsingErrors.joinToString("\n")
+            )
+        }
     }
 
 
@@ -87,10 +131,25 @@ class FirestoreSyncManager(
                 .get()
                 .await()
 
+        val isFromCache = snapshot.metadata.isFromCache
+        val hasPendingWrites = snapshot.metadata.hasPendingWrites()
+        val isServerConfirmed = !isFromCache && !hasPendingWrites
+
+        // 1. Read ALL local services from Room before syncing (including inactive)
+        val localBeforeSync = dao.getAllServicesForSync()
+
+        // 2. Parse incoming documents, tracking if any parsing errors occurred
+        var hasParsingErrors = false
+
         val services =
             snapshot.documents.mapNotNull { document ->
 
                 try {
+
+                    val updatedAt = readTimestampMillis(document, "updatedAt")
+                    if (updatedAt == null) {
+                        Log.w("FirestoreSyncManager", "Missing or unparseable updatedAt timestamp in service '${document.id}'")
+                    }
 
                     ServiceEntity(
                         id = document.id,
@@ -108,27 +167,44 @@ class FirestoreSyncManager(
                                 ?: true,
 
                         updatedAt =
-                            document.getLong("updatedAt")
-                                ?: document
-                                    .getTimestamp("updatedAt")
-                                    ?.toDate()
-                                    ?.time
-                                ?: 0L
+                            updatedAt ?: 0L
                     )
 
                 } catch (e: Exception) {
 
-                    e.printStackTrace()
+                    hasParsingErrors = true
+                    Log.e("FirestoreSyncManager", "Parsing failed for service '${document.id}': ${e.message}", e)
+
+                    recordParsingError("services", document.id, e)
 
                     null
                 }
             }
 
-        if (services.isNotEmpty()) {
+        // 3. Determine if safe to reconcile deletions
+        // Must be server-confirmed (not cached or unverified) and free of parsing errors
+        val canReconcileDeletions = isServerConfirmed && !hasParsingErrors
 
-            dao.insertServices(
-                services
-            )
+        val firestoreIds = snapshot.documents.map { it.id }.toSet()
+        val servicesToDelete = localBeforeSync.filter { it.id !in firestoreIds }
+
+        if (!isServerConfirmed) {
+            Log.w("FirestoreSyncManager", "Skipping service deletion reconciliation: snapshot is cached or has pending writes (isFromCache=$isFromCache, hasPendingWrites=$hasPendingWrites). Local data preserved.")
+        } else if (hasParsingErrors) {
+            Log.w("FirestoreSyncManager", "Skipping service deletion reconciliation: document parsing errors occurred. Local data preserved.")
+        }
+
+        // 4. Atomically reconcile deletions and insert updated records in a Room transaction
+        database.withTransaction {
+            if (canReconcileDeletions && servicesToDelete.isNotEmpty()) {
+                servicesToDelete.forEach { deletedService ->
+                    dao.deleteServiceById(deletedService.id)
+                }
+            }
+
+            if (services.isNotEmpty()) {
+                dao.insertServices(services)
+            }
         }
     }
 
@@ -188,15 +264,7 @@ class FirestoreSyncManager(
                                 ) ?: true,
 
                             updatedAt =
-                                document.getLong(
-                                    "updatedAt"
-                                )
-                                    ?: document
-                                        .getTimestamp(
-                                            "updatedAt"
-                                        )
-                                        ?.toDate()
-                                        ?.time
+                                readTimestampMillis(document, "updatedAt")
                                     ?: 0L
                         )
 
@@ -241,7 +309,7 @@ class FirestoreSyncManager(
 
                 } catch (e: Exception) {
 
-                    e.printStackTrace()
+                    recordParsingError("transactions", document.id, e)
 
                     null
                 }
@@ -306,9 +374,7 @@ class FirestoreSyncManager(
                             isActive =
                                 document.getBoolean("isActive") ?: true,
                             updatedAt =
-                                document.getLong("updatedAt")
-                                    ?: document.getTimestamp("updatedAt")
-                                        ?.toDate()?.time
+                                readTimestampMillis(document, "updatedAt")
                                     ?: 0L
                         )
 
@@ -594,15 +660,7 @@ class FirestoreSyncManager(
 
 
                     val updatedAt =
-                        document.getLong(
-                            "updatedAt"
-                        )
-                            ?: document
-                                .getTimestamp(
-                                    "updatedAt"
-                                )
-                                ?.toDate()
-                                ?.time
+                        readTimestampMillis(document, "updatedAt")
                             ?: 0L
 
 
@@ -1083,12 +1141,7 @@ class FirestoreSyncManager(
                                     "isActive"
                                 ) ?: true,
                             updatedAt =
-                                document.getLong(
-                                    "updatedAt"
-                                )
-                                    ?: document.getTimestamp(
-                                        "updatedAt"
-                                    )?.toDate()?.time
+                                readTimestampMillis(document, "updatedAt")
                                     ?: 0L
                         )
 
@@ -1226,34 +1279,18 @@ class FirestoreSyncManager(
                 try {
 
                     val datePosted =
-                        document
-                            .getTimestamp("datePosted")
-                            ?.toDate()
-                            ?.time
-                            ?: document.getLong("datePosted")
+                        readTimestampMillis(document, "datePosted")
                             ?: System.currentTimeMillis()
 
                     val updatedAt =
-                        document
-                            .getTimestamp("updatedAt")
-                            ?.toDate()
-                            ?.time
-                            ?: document.getLong("updatedAt")
+                        readTimestampMillis(document, "updatedAt")
                             ?: datePosted
 
                     val startDate =
-                        document
-                            .getTimestamp("startDate")
-                            ?.toDate()
-                            ?.time
-                            ?: document.getLong("startDate")
+                        readTimestampMillis(document, "startDate")
 
                     val endDate =
-                        document
-                            .getTimestamp("endDate")
-                            ?.toDate()
-                            ?.time
-                            ?: document.getLong("endDate")
+                        readTimestampMillis(document, "endDate")
 
                     AnnouncementEntity(
                         id = document.id,
