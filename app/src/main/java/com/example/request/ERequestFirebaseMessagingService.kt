@@ -1,16 +1,15 @@
 package com.example.request
 
-import android.app.PendingIntent
-import android.content.Intent
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ERequestFirebaseMessagingService :
     FirebaseMessagingService() {
@@ -25,250 +24,132 @@ class ERequestFirebaseMessagingService :
                     Dispatchers.IO
         )
 
-
-    // =====================================================
-    // NEW / REFRESHED FCM TOKEN
-    // =====================================================
-
     override fun onNewToken(
         token: String
     ) {
+        super.onNewToken(token)
 
-        super.onNewToken(
-            token
-        )
-
-        Log.d(
-            TAG,
-            "New FCM token generated."
-        )
+        Log.d(TAG, "New FCM token generated.")
 
         serviceScope.launch {
-
             try {
-
-                FCMTokenManager(
-                    applicationContext
-                ).saveToken(
-                    token
-                )
-
-                Log.d(
-                    TAG,
-                    "New FCM token saved to Firestore."
-                )
-
+                FCMTokenManager(applicationContext).saveToken(token)
+                Log.d(TAG, "New FCM token saved to Firestore.")
             } catch (e: Exception) {
-
-                Log.e(
-                    TAG,
-                    "Unable to save new FCM token.",
-                    e
-                )
+                Log.e(TAG, "Unable to save new FCM token.", e)
             }
         }
     }
 
-
-    // =====================================================
-    // RECEIVE FCM MESSAGE
-    // =====================================================
-
     override fun onMessageReceived(
         remoteMessage: RemoteMessage
     ) {
+        super.onMessageReceived(remoteMessage)
 
-        super.onMessageReceived(
-            remoteMessage
-        )
+        Log.d(TAG, "FCM message received.")
 
-        Log.d(
-            TAG,
-            "FCM message received."
-        )
-
-        val data =
-            remoteMessage.data
+        val data = remoteMessage.data
 
         val title =
-            remoteMessage
-                .notification
-                ?.title
+            remoteMessage.notification?.title
                 ?: data["title"]
-                ?: "E-Request"
+                ?: "E-ReQuest"
 
         val message =
-            remoteMessage
-                .notification
-                ?.body
+            remoteMessage.notification?.body
                 ?: data["message"]
+                ?: data["body"]
                 ?: "School transaction information has been updated."
 
         val transactionId =
             data["transactionId"]
+                ?.trim()
                 ?: ""
 
         val transactionName =
             data["transactionName"]
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
                 ?: title
 
         val serviceName =
             data["serviceName"]
+                ?.trim()
                 ?: ""
 
         val targetSection =
             data["targetSection"]
-                ?: ""
+                ?.trim()
+                ?: "transaction"
 
-        showNotification(
-            title = title,
-            message = message,
+        val notificationHelper = NotificationHelper(applicationContext)
+
+        val notificationKey = if (transactionId.isNotBlank()) {
+            transactionId
+        } else {
+            remoteMessage.messageId ?: "fcm_${System.currentTimeMillis()}"
+        }
+
+        // 1. Immediately display local NotificationCompat alert (works when foregrounded or backgrounded with data payload)
+        val wasDispatched = notificationHelper.showTransactionUpdateNotification(
+            notificationKey = notificationKey,
             transactionId = transactionId,
             transactionName = transactionName,
             serviceName = serviceName,
-            targetSection = targetSection
+            updatedSection = targetSection,
+            notificationMessage = message
         )
-    }
 
+        // 2. Persist notification in Room with isNotified = wasDispatched and trigger background sync
+        serviceScope.launch {
+            val database = ERequestDatabase.getDatabase(applicationContext)
+            val dao = database.eRequestDao()
 
-    // =====================================================
-    // SHOW DEVICE NOTIFICATION
-    // =====================================================
+            try {
+                val now = System.currentTimeMillis()
+                val formattedDate = SimpleDateFormat(
+                    "MMM dd, yyyy • hh:mm a",
+                    Locale.getDefault()
+                ).format(Date(now))
 
-    private fun showNotification(
-        title: String,
-        message: String,
-        transactionId: String,
-        transactionName: String,
-        serviceName: String,
-        targetSection: String
-    ) {
-
-        val intent =
-            if (transactionId.isNotBlank()) {
-
-                Intent(
-                    this,
-                    TransactionDetailsActivity::class.java
-                ).apply {
-
-                    putExtra(
-                        "TRANSACTION_ID",
-                        transactionId
-                    )
-
-                    putExtra(
-                        "TRANSACTION_NAME",
-                        transactionName
-                    )
-
-                    putExtra(
-                        "SERVICE_NAME",
-                        serviceName
-                    )
-
-                    putExtra(
-                        "TARGET_SECTION",
-                        targetSection
-                    )
-
-                    flags =
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP
+                val entityId = if (transactionId.isNotBlank()) {
+                    dao.getUnreadNotificationByTransaction(transactionId)?.id
+                        ?: "tx_update_$transactionId"
+                } else {
+                    "fcm_notice_${remoteMessage.messageId ?: now}"
                 }
 
-            } else {
+                val entity = UpdateNotificationEntity(
+                    id = entityId,
+                    serviceName = serviceName,
+                    transactionId = transactionId,
+                    transactionName = transactionName,
+                    updatedSection = targetSection,
+                    message = message,
+                    dateTime = formattedDate,
+                    isRead = false,
+                    isNotified = wasDispatched,
+                    createdAt = now
+                )
 
-                Intent(
-                    this,
-                    HomeActivity::class.java
-                ).apply {
-
-                    flags =
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                                Intent.FLAG_ACTIVITY_SINGLE_TOP
-                }
+                dao.insertUpdateNotification(entity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to persist FCM notification in Room.", e)
             }
 
-
-        // Different transaction = different notification.
-        // Same transaction can update its existing notification.
-
-        val notificationId =
-            if (transactionId.isNotBlank()) {
-
-                transactionId.hashCode()
-
-            } else {
-
-                System
-                    .currentTimeMillis()
-                    .toInt()
+            // 3. Mark pending sync and attempt immediate background Firestore -> Room reconciliation
+            FirestoreSyncManager.setPendingSync(applicationContext, true)
+            try {
+                FirestoreSyncManager(applicationContext).syncAllData()
+                Log.d(TAG, "Background sync after FCM message completed.")
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "Immediate sync after FCM deferred; enqueuing connected WorkManager sync.",
+                    e
+                )
+                ERequestBackgroundSyncWorker.enqueueImmediateOnlineSync(applicationContext)
             }
-
-
-        val pendingIntent =
-            PendingIntent.getActivity(
-                this,
-                notificationId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                        PendingIntent.FLAG_IMMUTABLE
-            )
-
-
-        val notification =
-            NotificationCompat.Builder(
-                this,
-                ERequestApplication.UPDATES_CHANNEL_ID
-            )
-                .setSmallIcon(
-                    R.mipmap.ic_launcher
-                )
-                .setContentTitle(
-                    title
-                )
-                .setContentText(
-                    message
-                )
-                .setStyle(
-                    NotificationCompat
-                        .BigTextStyle()
-                        .bigText(
-                            message
-                        )
-                )
-                .setPriority(
-                    NotificationCompat.PRIORITY_HIGH
-                )
-                .setCategory(
-                    NotificationCompat.CATEGORY_STATUS
-                )
-                .setAutoCancel(
-                    true
-                )
-                .setContentIntent(
-                    pendingIntent
-                )
-                .build()
-
-
-        try {
-
-            NotificationManagerCompat
-                .from(this)
-                .notify(
-                    notificationId,
-                    notification
-                )
-
-        } catch (e: SecurityException) {
-
-            Log.e(
-                TAG,
-                "Notification permission was not granted.",
-                e
-            )
         }
     }
 }

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- ================================================= -->
+    <!-- DIALOG HEADER                                     -->
+    <!-- ================================================= -->
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tvPreviewTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Image Preview"
+            android:textColor="@color/text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnClosePreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="8dp"
+            android:text="✕"
+            android:textColor="@color/text_primary"
+            android:textSize="24sp" />
+
+    </LinearLayout>
+
+    <!-- ================================================= -->
+    <!-- LOADING INDICATOR                                 -->
+    <!-- ================================================= -->
+
+    <ProgressBar
+        android:id="@+id/pbPreviewLoading"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="16dp"
+        android:indeterminate="true" />
+
+    <!-- ================================================= -->
+    <!-- ZOOMABLE IMAGE VIEW (FIT_CENTER + PINCH/TAP ZOOM) -->
+    <!-- ================================================= -->
+
+    <com.example.request.ZoomableImageView
+        android:id="@+id/ivZoomablePreview"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_weight="1"
+        android:adjustViewBounds="true"
+        android:contentDescription="Zoomable procedure reference image"
+        android:scaleType="fitCenter" />
+
+    <!-- ================================================= -->
+    <!-- ZOOM GESTURE HINT                                 -->
+    <!-- ================================================= -->
+
+    <TextView
+        android:id="@+id/tvZoomHint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:gravity="center"
+        android:text="Pinch with two fingers or tap image to zoom in/out"
+        android:textColor="@color/text_secondary"
+        android:textSize="12sp" />
+
+</LinearLayout>

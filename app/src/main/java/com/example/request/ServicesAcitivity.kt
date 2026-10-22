@@ -2,468 +2,160 @@ package com.example.request
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class ServicesActivity : AppCompatActivity() {
 
-    // =====================================================
-    // UI COMPONENTS
-    // =====================================================
-
-    private lateinit var servicesContainer: LinearLayout
+    private lateinit var rvServices: RecyclerView
     private lateinit var tvNoServices: TextView
-
     private lateinit var navHome: TextView
     private lateinit var navServices: TextView
     private lateinit var navProgress: TextView
-
     private lateinit var btnRefresh: ImageView
 
-
-    // =====================================================
-    // DATABASE
-    // =====================================================
-
     private lateinit var dao: ERequestDao
-
-
-    // =====================================================
-    // FIRESTORE SYNC
-    // =====================================================
-
     private lateinit var firestoreSyncManager: FirestoreSyncManager
+    private lateinit var serviceAdapter: SchoolServiceAdapter
 
+    private var isRefreshing = false
+    private var activeToast: Toast? = null
 
-    // =====================================================
-    // ON CREATE
-    // =====================================================
+    private fun showSingleToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
+        activeToast?.cancel()
+        activeToast = Toast.makeText(this, message, duration).also { it.show() }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
-
         setContentView(R.layout.activity_services)
 
+        rvServices = findViewById(R.id.rvServices)
+        tvNoServices = findViewById(R.id.tvNoServices)
+        navHome = findViewById(R.id.navHome)
+        navServices = findViewById(R.id.navServices)
+        navProgress = findViewById(R.id.navProgress)
+        btnRefresh = findViewById(R.id.btnRefresh)
 
-        // =================================================
-        // CONNECT XML
-        // =================================================
+        val database = ERequestDatabase.getDatabase(applicationContext)
+        dao = database.eRequestDao()
+        firestoreSyncManager = FirestoreSyncManager(applicationContext)
 
-        servicesContainer =
-            findViewById(R.id.servicesContainer)
-
-        tvNoServices =
-            findViewById(R.id.tvNoServices)
-
-        navHome =
-            findViewById(R.id.navHome)
-
-        navServices =
-            findViewById(R.id.navServices)
-
-        navProgress =
-            findViewById(R.id.navProgress)
-
-        btnRefresh =
-            findViewById(R.id.btnRefresh)
-
-
-        // =================================================
-        // CONNECT ROOM DATABASE
-        // =================================================
-
-        val database =
-            ERequestDatabase.getDatabase(
-                applicationContext
-            )
-
-        dao =
-            database.eRequestDao()
-
-
-        // =================================================
-        // CONNECT FIRESTORE SYNC MANAGER
-        // =================================================
-
-        firestoreSyncManager =
-            FirestoreSyncManager(
-                applicationContext
-            )
-
-
-        // =================================================
-        // LOAD SAVED SERVICES FROM ROOM
-        // =================================================
-
-        loadServices()
-
-
-        // =================================================
-        // REFRESH BUTTON
-        // =================================================
+        setupRecyclerView()
 
         btnRefresh.setOnClickListener {
-
             refreshData()
         }
 
-
-        // =================================================
-        // HOME NAVIGATION
-        // =================================================
-
         navHome.setOnClickListener {
-
-            val intent =
-                Intent(
-                    this,
-                    HomeActivity::class.java
-                )
-
-            startActivity(intent)
-
+            startActivity(Intent(this, HomeActivity::class.java))
             finish()
         }
 
-
-        // =================================================
-        // SERVICES NAVIGATION
-        // =================================================
-
         navServices.setOnClickListener {
-
             // Already on Services page
         }
 
-
-        // =================================================
-        // PROGRESS NAVIGATION
-        // =================================================
-
         navProgress.setOnClickListener {
-
-            val intent =
-                Intent(
-                    this,
-                    ProgressActivity::class.java
-                )
-
-            startActivity(intent)
-
+            startActivity(Intent(this, ProgressActivity::class.java))
             finish()
+        }
+
+        loadServices()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        loadServices()
+    }
+
+    private fun setupRecyclerView() {
+        serviceAdapter = SchoolServiceAdapter { service ->
+            val intent = Intent(this, TransactionListActivity::class.java).apply {
+                putExtra("SERVICE_ID", service.id)
+                putExtra("SERVICE_NAME", service.name)
+            }
+            startActivity(intent)
+        }
+
+        rvServices.apply {
+            layoutManager = LinearLayoutManager(this@ServicesActivity)
+            adapter = serviceAdapter
+            setHasFixedSize(true)
         }
     }
 
+    private fun loadServices() {
+        lifecycleScope.launch {
+            val services = withContext(Dispatchers.IO) {
+                dao.getAllServices()
+            }
+            displayServices(services)
+        }
+    }
 
-    // =====================================================
-    // REFRESH DATA
-    //
-    // FIRESTORE
-    //      ↓
-    // ROOM DATABASE
-    //      ↓
-    // SERVICES PAGE
-    // =====================================================
+    private fun displayServices(services: List<ServiceEntity>) {
+        serviceAdapter.submitList(services) {
+            if (!isFinishing && !isDestroyed) {
+                if (services.isEmpty()) {
+                    rvServices.visibility = View.GONE
+                    tvNoServices.visibility = View.VISIBLE
+                } else {
+                    rvServices.visibility = View.VISIBLE
+                    tvNoServices.visibility = View.GONE
+                }
+            }
+        }
+    }
 
     private fun refreshData() {
-
-        // Disable button while syncing
-        // para hindi mapindot nang paulit-ulit
-
+        if (isRefreshing || FirestoreSyncManager.isCurrentlySyncing()) return
+        isRefreshing = true
         btnRefresh.isEnabled = false
-
-
-        // =================================================
-        // REFRESH ICON ANIMATION
-        // =================================================
 
         btnRefresh.animate()
             .rotationBy(360f)
-            .setDuration(700)
+            .setDuration(700L)
             .start()
 
-
-        Toast.makeText(
-            this,
-            "Refreshing...",
-            Toast.LENGTH_SHORT
-        ).show()
-
+        showSingleToast("Refreshing...")
 
         lifecycleScope.launch {
-
             try {
-
-                // =========================================
-                // STEP 1:
-                // FIRESTORE → ROOM
-                // =========================================
-
                 withContext(Dispatchers.IO) {
-
-                    firestoreSyncManager
-                        .syncAllData()
+                    firestoreSyncManager.syncAllData()
                 }
 
-
-                // =========================================
-                // STEP 2:
-                // GET UPDATED SERVICES FROM ROOM
-                // =========================================
-
-                val services =
-                    withContext(Dispatchers.IO) {
-
-                        dao.getAllServices()
-                    }
-
-
-                // =========================================
-                // STEP 3:
-                // DISPLAY UPDATED SERVICES
-                // =========================================
-
-                displayServices(
-                    services
-                )
-
-
-                // =========================================
-                // SUCCESS MESSAGE
-                // =========================================
-
-                Toast.makeText(
-                    this@ServicesActivity,
-                    "Data updated.",
-                    Toast.LENGTH_SHORT
-                ).show()
-
-
-            } catch (e: Exception) {
-
-                // =========================================
-                // SYNC FAILED
-                // =========================================
-
-                e.printStackTrace()
-
-
-                // =========================================
-                // KEEP USING SAVED ROOM DATA
-                // =========================================
-
-                val savedServices =
-                    withContext(Dispatchers.IO) {
-
-                        dao.getAllServices()
-                    }
-
-
-                displayServices(
-                    savedServices
-                )
-
-
-                // =========================================
-                // OFFLINE / ERROR MESSAGE
-                // =========================================
-
-                Toast.makeText(
-                    this@ServicesActivity,
-                    "Unable to sync. Showing saved data.",
-                    Toast.LENGTH_SHORT
-                ).show()
-
-
-            } finally {
-
-                // =========================================
-                // ENABLE REFRESH BUTTON AGAIN
-                // =========================================
-
-                btnRefresh.isEnabled = true
-            }
-        }
-    }
-
-
-    // =====================================================
-    // LOAD SERVICES FROM ROOM DATABASE
-    // =====================================================
-
-    private fun loadServices() {
-
-        lifecycleScope.launch {
-
-            val services =
-                withContext(Dispatchers.IO) {
-
+                val services = withContext(Dispatchers.IO) {
                     dao.getAllServices()
                 }
 
+                displayServices(services)
 
-            displayServices(
-                services
-            )
-        }
-    }
+                showSingleToast("Data updated.")
+            } catch (e: Exception) {
+                e.printStackTrace()
 
+                val savedServices = withContext(Dispatchers.IO) {
+                    dao.getAllServices()
+                }
 
-    // =====================================================
-    // DISPLAY SERVICES
-    // =====================================================
+                displayServices(savedServices)
 
-    private fun displayServices(
-        services: List<ServiceEntity>
-    ) {
-
-        // Remove old service cards first
-
-        servicesContainer.removeAllViews()
-
-
-        // =================================================
-        // NO SERVICES AVAILABLE
-        // =================================================
-
-        if (services.isEmpty()) {
-
-            tvNoServices.visibility =
-                View.VISIBLE
-
-            return
-        }
-
-
-        // Hide empty message
-
-        tvNoServices.visibility =
-            View.GONE
-
-
-        // =================================================
-        // DISPLAY EACH SERVICE
-        // =================================================
-
-        services.forEach { service ->
-
-
-            // =============================================
-            // CREATE SERVICE CARD
-            // =============================================
-
-            val serviceView =
-                LayoutInflater
-                    .from(this)
-                    .inflate(
-                        R.layout.item_school_service,
-                        servicesContainer,
-                        false
-                    )
-
-
-            // =============================================
-            // CONNECT SERVICE CARD XML
-            // =============================================
-
-            val tvServiceIcon =
-                serviceView
-                    .findViewById<TextView>(
-                        R.id.tvServiceIcon
-                    )
-
-
-            val tvServiceName =
-                serviceView
-                    .findViewById<TextView>(
-                        R.id.tvServiceName
-                    )
-
-
-            val tvServiceDescription =
-                serviceView
-                    .findViewById<TextView>(
-                        R.id.tvServiceDescription
-                    )
-
-
-            // =============================================
-            // SERVICE ICON
-            // First letter of service name
-            // =============================================
-
-            tvServiceIcon.text =
-                service.name
-                    .firstOrNull()
-                    ?.uppercase()
-                    ?: "S"
-
-
-            // =============================================
-            // SERVICE NAME
-            // =============================================
-
-            tvServiceName.text =
-                service.name
-
-
-            // =============================================
-            // SERVICE DESCRIPTION
-            // =============================================
-
-            tvServiceDescription.text =
-                service.description
-
-
-            // =============================================
-            // SERVICE CLICK
-            //
-            // SERVICES
-            //      ↓
-            // TRANSACTION LIST
-            // =============================================
-
-            serviceView.setOnClickListener {
-
-                val intent =
-                    Intent(
-                        this,
-                        TransactionListActivity::class.java
-                    ).apply {
-
-                        putExtra(
-                            "SERVICE_ID",
-                            service.id
-                        )
-
-                        putExtra(
-                            "SERVICE_NAME",
-                            service.name
-                        )
-                    }
-
-
-                startActivity(intent)
+                showSingleToast("Unable to sync. Showing saved data.")
+            } finally {
+                isRefreshing = false
+                btnRefresh.isEnabled = true
             }
-
-
-            // =============================================
-            // ADD CARD TO SERVICES CONTAINER
-            // =============================================
-
-            servicesContainer.addView(
-                serviceView
-            )
         }
     }
 }

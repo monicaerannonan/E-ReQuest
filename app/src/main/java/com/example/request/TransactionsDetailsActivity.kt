@@ -241,8 +241,17 @@ class TransactionDetailsActivity : AppCompatActivity() {
     // FIRESTORE -> ROOM -> CURRENT DETAILS PAGE
     // =========================================================
 
-    private fun refreshData() {
+    private var isRefreshing = false
+    private var activeToast: Toast? = null
 
+    private fun showSingleToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
+        activeToast?.cancel()
+        activeToast = Toast.makeText(this, message, duration).also { it.show() }
+    }
+
+    private fun refreshData() {
+        if (isRefreshing || FirestoreSyncManager.isCurrentlySyncing()) return
+        isRefreshing = true
         btnRefresh.isEnabled = false
 
         btnRefresh.animate()
@@ -250,11 +259,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
             .setDuration(700)
             .start()
 
-        Toast.makeText(
-            this,
-            "Refreshing...",
-            Toast.LENGTH_SHORT
-        ).show()
+        showSingleToast("Refreshing...")
 
         lifecycleScope.launch {
 
@@ -274,11 +279,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                     targetSection = null
                 )
 
-                Toast.makeText(
-                    this@TransactionDetailsActivity,
-                    "Transaction details updated.",
-                    Toast.LENGTH_SHORT
-                ).show()
+                showSingleToast("Transaction details updated.")
 
             } catch (e: Exception) {
 
@@ -293,14 +294,10 @@ class TransactionDetailsActivity : AppCompatActivity() {
                     targetSection = null
                 )
 
-                Toast.makeText(
-                    this@TransactionDetailsActivity,
-                    "Unable to sync. Showing saved data.",
-                    Toast.LENGTH_SHORT
-                ).show()
+                showSingleToast("Unable to sync. Showing saved data.")
 
             } finally {
-
+                isRefreshing = false
                 btnRefresh.isEnabled = true
             }
         }
@@ -1159,7 +1156,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                                 true
 
                             scaleType =
-                                ImageView.ScaleType.CENTER_CROP
+                                ImageView.ScaleType.FIT_CENTER
 
                             contentDescription =
                                 step.imageCaption
@@ -1174,7 +1171,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                             layoutParams =
                                 LinearLayout.LayoutParams(
                                     LinearLayout.LayoutParams.MATCH_PARENT,
-                                    220.dp()
+                                    LinearLayout.LayoutParams.WRAP_CONTENT
                                 ).apply {
 
                                     topMargin =
@@ -1249,7 +1246,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                         TextView(this).apply {
 
                             text =
-                                "Tap image to enlarge"
+                                "Tap image to enlarge and zoom"
 
                             textSize =
                                 11f
@@ -1280,7 +1277,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
     }
 
     // =========================================================
-    // IMAGE PREVIEW
+    // IMAGE PREVIEW (PINCH-TO-ZOOM & TAP-TO-ZOOM)
     // =========================================================
 
     private fun showImagePreview(
@@ -1294,173 +1291,43 @@ class TransactionDetailsActivity : AppCompatActivity() {
             Window.FEATURE_NO_TITLE
         )
 
-        val mainContainer =
-            LinearLayout(this).apply {
-
-                orientation =
-                    LinearLayout.VERTICAL
-
-                setPadding(
-                    16.dp(),
-                    16.dp(),
-                    16.dp(),
-                    16.dp()
-                )
-
-                setBackgroundColor(
-                    getColor(
-                        R.color.surface
-                    )
-                )
-            }
-
-        val topContainer =
-            LinearLayout(this).apply {
-
-                orientation =
-                    LinearLayout.HORIZONTAL
-
-                gravity =
-                    Gravity.CENTER_VERTICAL
-            }
-
-        val title =
-            TextView(this).apply {
-
-                text =
-                    if (
-                        !step.imageCaption
-                            .isNullOrBlank()
-                    ) {
-
-                        step.imageCaption
-
-                    } else {
-
-                        "Image Preview"
-                    }
-
-                textSize =
-                    18f
-
-                setTextColor(
-                    getColor(
-                        R.color.text_primary
-                    )
-                )
-
-                setTypeface(
-                    typeface,
-                    android.graphics.Typeface.BOLD
-                )
-
-                layoutParams =
-                    LinearLayout.LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1f
-                    )
-            }
-
-        val closeButton =
-            TextView(this).apply {
-
-                text =
-                    "✕"
-
-                textSize =
-                    24f
-
-                setTextColor(
-                    getColor(
-                        R.color.text_primary
-                    )
-                )
-
-                gravity =
-                    Gravity.CENTER
-
-                setPadding(
-                    16.dp(),
-                    8.dp(),
-                    8.dp(),
-                    8.dp()
-                )
-
-                setOnClickListener {
-
-                    dialog.dismiss()
-                }
-            }
-
-        topContainer.addView(
-            title
+        dialog.setContentView(
+            R.layout.dialog_image_preview
         )
 
-        topContainer.addView(
-            closeButton
-        )
+        val tvPreviewTitle =
+            dialog.findViewById<TextView>(
+                R.id.tvPreviewTitle
+            )
 
-        mainContainer.addView(
-            topContainer
-        )
+        val btnClosePreview =
+            dialog.findViewById<TextView>(
+                R.id.btnClosePreview
+            )
 
         val progressBar =
-            ProgressBar(this).apply {
-
-                isIndeterminate =
-                    true
-
-                layoutParams =
-                    LinearLayout.LayoutParams(
-                        48.dp(),
-                        48.dp()
-                    ).apply {
-
-                        gravity =
-                            Gravity.CENTER_HORIZONTAL
-
-                        topMargin =
-                            16.dp()
-                    }
-            }
-
-        mainContainer.addView(
-            progressBar
-        )
+            dialog.findViewById<ProgressBar>(
+                R.id.pbPreviewLoading
+            )
 
         val imageView =
-            ImageView(this).apply {
+            dialog.findViewById<ZoomableImageView>(
+                R.id.ivZoomablePreview
+            )
 
-                adjustViewBounds =
-                    true
-
-                scaleType =
-                    ImageView.ScaleType.FIT_CENTER
-
-                contentDescription =
-                    step.imageCaption
-                        ?: "Image Preview"
-
-                layoutParams =
-                    LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        0,
-                        1f
-                    ).apply {
-
-                        topMargin =
-                            12.dp()
-                    }
+        tvPreviewTitle.text =
+            if (!step.imageCaption.isNullOrBlank()) {
+                step.imageCaption
+            } else {
+                "Image Preview"
             }
 
-        mainContainer.addView(
-            imageView
-        )
+        imageView.contentDescription =
+            step.imageCaption ?: "Image Preview"
 
-        dialog.setContentView(
-            mainContainer
-        )
+        btnClosePreview.setOnClickListener {
+            dialog.dismiss()
+        }
 
         dialog.window?.apply {
 
@@ -1499,7 +1366,11 @@ class TransactionDetailsActivity : AppCompatActivity() {
 
             progressBar =
                 progressBar
-        )
+        ) {
+            imageView.post {
+                imageView.resetToFitCenter()
+            }
+        }
     }
 
     // =========================================================

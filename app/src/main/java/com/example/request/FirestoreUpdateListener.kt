@@ -1,9 +1,12 @@
 package com.example.request
 
+import android.os.Handler
+import android.os.Looper
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 
 class FirestoreUpdateListener(
+    private val debounceDelayMs: Long = 1500L,
     private val onUpdateDetected: () -> Unit
 ) {
 
@@ -13,6 +16,11 @@ class FirestoreUpdateListener(
     private val listeners =
         mutableListOf<ListenerRegistration>()
 
+    private val mainHandler =
+        Handler(Looper.getMainLooper())
+
+    private var pendingDispatchRunnable: Runnable? = null
+
     private var isStarted = false
 
     // Prevent the first Firestore snapshot from being
@@ -20,13 +28,7 @@ class FirestoreUpdateListener(
     private val initializedCollections =
         mutableSetOf<String>()
 
-
-    // =====================================================
-    // START LISTENING
-    // =====================================================
-
     fun start() {
-
         if (isStarted) {
             return
         }
@@ -41,15 +43,9 @@ class FirestoreUpdateListener(
         listenToCollection("announcements")
     }
 
-
-    // =====================================================
-    // LISTEN TO FIRESTORE COLLECTION
-    // =====================================================
-
     private fun listenToCollection(
         collectionName: String
     ) {
-
         val registration =
             firestore
                 .collection(collectionName)
@@ -64,61 +60,62 @@ class FirestoreUpdateListener(
                         return@addSnapshotListener
                     }
 
-                    // First snapshot only establishes the
-                    // current Firestore state.
-                    //
-                    // We don't want opening HomeActivity
-                    // while already online to immediately
-                    // trigger a full sync.
-                    if (
-                        !initializedCollections.contains(
-                            collectionName
-                        )
-                    ) {
-
-                        initializedCollections.add(
-                            collectionName
-                        )
-
+                    // Establish baseline on the first snapshot for each collection.
+                    if (!initializedCollections.contains(collectionName)) {
+                        initializedCollections.add(collectionName)
                         return@addSnapshotListener
                     }
 
-                    // Ignore snapshots where Firestore reports
-                    // no document changes.
-                    if (snapshot.documentChanges.isEmpty()) {
+                    // Ignore cached snapshots or snapshots without actual document changes.
+                    if (snapshot.metadata.isFromCache || snapshot.documentChanges.isEmpty()) {
                         return@addSnapshotListener
                     }
 
-                    onUpdateDetected()
+                    scheduleDebouncedUpdate()
                 }
 
-        listeners.add(
-            registration
-        )
+        listeners.add(registration)
     }
 
+    private fun scheduleDebouncedUpdate() {
+        pendingDispatchRunnable?.let { mainHandler.removeCallbacks(it) }
 
-    // =====================================================
-    // STOP LISTENING
-    // =====================================================
+        val runnable = object : Runnable {
+            override fun run() {
+                if (!isStarted) {
+                    pendingDispatchRunnable = null
+                    return
+                }
+
+                // If a sync pass is currently running, defer the callback rather than dropping it
+                if (FirestoreSyncManager.isCurrentlySyncing()) {
+                    mainHandler.postDelayed(this, debounceDelayMs)
+                    return
+                }
+
+                pendingDispatchRunnable = null
+                onUpdateDetected()
+            }
+        }
+
+        pendingDispatchRunnable = runnable
+        mainHandler.postDelayed(runnable, debounceDelayMs)
+    }
 
     fun stop() {
+        pendingDispatchRunnable?.let { mainHandler.removeCallbacks(it) }
+        pendingDispatchRunnable = null
 
         listeners.forEach { listener ->
-
             try {
-
                 listener.remove()
-
             } catch (_: Exception) {
                 // Ignore listener cleanup errors.
             }
         }
 
         listeners.clear()
-
         initializedCollections.clear()
-
         isStarted = false
     }
 }

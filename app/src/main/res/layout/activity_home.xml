@@ -36,13 +36,22 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <ImageView
+                android:id="@+id/ivHomeLogo"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="12dp"
+                android:background="@drawable/bg_logo_circle"
+                android:padding="5dp"
+                android:contentDescription="@string/app_name"
+                android:src="@drawable/ic_erequest_logo"
+                android:scaleType="fitCenter" />
 
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:orientation="vertical">
-
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -51,7 +60,6 @@
                     android:textColor="@color/text_white"
                     android:textSize="28sp"
                     android:textStyle="bold" />
-
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -227,7 +235,7 @@
                 HOME UPDATE CARDS WILL BE GENERATED HERE
             -->
 
-            <ScrollView
+            <com.example.request.NestedInnerScrollView
                 android:id="@+id/updateNotificationsScrollView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -242,7 +250,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
 
-            </ScrollView>
+            </com.example.request.NestedInnerScrollView>
 
 
             <!-- SHOWN IF ALL UPDATES ARE READ -->
@@ -284,7 +292,7 @@
                 android:textSize="13sp" />
 
 
-            <ScrollView
+            <com.example.request.NestedInnerScrollView
                 android:id="@+id/importantAnnouncementsScrollView"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -299,7 +307,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
 
-            </ScrollView>
+            </com.example.request.NestedInnerScrollView>
 
 
             <TextView

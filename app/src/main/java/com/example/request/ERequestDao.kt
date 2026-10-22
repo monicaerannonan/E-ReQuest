@@ -115,6 +115,13 @@ interface ERequestDao {
 
     @Query("""
         SELECT * FROM requirements
+        WHERE isActive = 1
+        ORDER BY displayOrder ASC
+    """)
+    suspend fun getAllActiveRequirements(): List<RequirementEntity>
+
+    @Query("""
+        SELECT * FROM requirements
     """)
     suspend fun getAllRequirementsForSync(): List<RequirementEntity>
 
@@ -313,6 +320,26 @@ interface ERequestDao {
 
     @Query("""
         SELECT * FROM update_notifications
+        WHERE isRead = 0
+        AND isNotified = 0
+        ORDER BY createdAt DESC
+    """)
+    suspend fun getUnnotifiedUpdateNotifications():
+            List<UpdateNotificationEntity>
+
+    @Query("""
+        SELECT * FROM update_notifications
+        WHERE transactionId = :transactionId
+        AND isRead = 0
+        ORDER BY createdAt DESC
+        LIMIT 1
+    """)
+    suspend fun getUnreadNotificationByTransaction(
+        transactionId: String
+    ): UpdateNotificationEntity?
+
+    @Query("""
+        SELECT * FROM update_notifications
         ORDER BY createdAt DESC
     """)
     suspend fun getAllUpdateNotifications():
@@ -324,6 +351,15 @@ interface ERequestDao {
         WHERE id = :notificationId
     """)
     suspend fun markUpdateNotificationAsRead(
+        notificationId: String
+    )
+
+    @Query("""
+        UPDATE update_notifications
+        SET isNotified = 1
+        WHERE id = :notificationId
+    """)
+    suspend fun markUpdateNotificationAsNotified(
         notificationId: String
     )
 

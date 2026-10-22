@@ -44,6 +44,13 @@ class ERequestApplication :
 
 
         // =================================================
+        // SCHEDULE WORKMANAGER PERIODIC BACKGROUND SYNC
+        // =================================================
+
+        ERequestBackgroundSyncWorker.schedulePeriodicSync(this)
+
+
+        // =================================================
         // REGISTER CURRENT DEVICE FOR FCM
         // =================================================
 
@@ -95,8 +102,12 @@ class ERequestApplication :
 
                 Log.e(
                     "ERequestSync",
-                    "Firestore synchronization failed.",
+                    "Firestore synchronization failed; enqueuing connected WorkManager sync.",
                     e
+                )
+
+                ERequestBackgroundSyncWorker.enqueueImmediateOnlineSync(
+                    this@ERequestApplication
                 )
             }
         }

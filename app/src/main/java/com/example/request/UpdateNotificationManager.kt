@@ -7,7 +7,6 @@ class UpdateNotificationManager(
     suspend fun save(
         notification: UpdateNotification
     ) {
-
         val entity =
             UpdateNotificationEntity(
                 id = notification.id,
@@ -17,7 +16,8 @@ class UpdateNotificationManager(
                 updatedSection = notification.updatedSection,
                 message = notification.message,
                 dateTime = notification.dateTime,
-                isRead = false
+                isRead = false,
+                isNotified = notification.isNotified
             )
 
         dao.insertUpdateNotification(
@@ -25,42 +25,47 @@ class UpdateNotificationManager(
         )
     }
 
-    suspend fun getUnread():
-            List<UpdateNotification> {
-
+    suspend fun getUnread(): List<UpdateNotification> {
         return dao
             .getUnreadUpdateNotifications()
             .map { entity ->
-
-                UpdateNotification(
-                    id = entity.id,
-                    serviceName =
-                        entity.serviceName,
-                    transactionId =
-                        entity.transactionId,
-                    transactionName =
-                        entity.transactionName,
-                    updatedSection =
-                        entity.updatedSection,
-                    message =
-                        entity.message,
-                    dateTime =
-                        entity.dateTime
-                )
+                entity.toDomainModel()
             }
+    }
+
+    suspend fun getUnnotified(): List<UpdateNotification> {
+        return dao
+            .getUnnotifiedUpdateNotifications()
+            .map { entity ->
+                entity.toDomainModel()
+            }
+    }
+
+    suspend fun markAsNotified(id: String) {
+        dao.markUpdateNotificationAsNotified(id)
     }
 
     suspend fun markAsRead(
         id: String
     ) {
-
-        dao.markUpdateNotificationAsRead(
-            id
-        )
+        dao.markUpdateNotificationAsRead(id)
+        dao.markUpdateNotificationAsNotified(id)
     }
 
     suspend fun deleteAll() {
-
         dao.deleteAllUpdateNotifications()
+    }
+
+    private fun UpdateNotificationEntity.toDomainModel(): UpdateNotification {
+        return UpdateNotification(
+            id = id,
+            serviceName = serviceName,
+            transactionId = transactionId,
+            transactionName = transactionName,
+            updatedSection = updatedSection,
+            message = message,
+            dateTime = dateTime,
+            isNotified = isNotified
+        )
     }
 }

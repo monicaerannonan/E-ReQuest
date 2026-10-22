@@ -7,5 +7,6 @@ data class UpdateNotification(
     val transactionName: String,
     val updatedSection: String,
     val message: String,
-    val dateTime: String
+    val dateTime: String,
+    val isNotified: Boolean = false
 )

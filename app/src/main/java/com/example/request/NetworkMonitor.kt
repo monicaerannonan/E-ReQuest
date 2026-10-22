@@ -10,8 +10,10 @@ class NetworkMonitor(
     private val onReconnected: () -> Unit
 ) {
 
+    private val appContext = context.applicationContext
+
     private val connectivityManager =
-        context.applicationContext.getSystemService(
+        appContext.getSystemService(
             Context.CONNECTIVITY_SERVICE
         ) as ConnectivityManager
 
@@ -19,49 +21,33 @@ class NetworkMonitor(
 
     private var isRegistered = false
 
-
     private val networkCallback =
         object : ConnectivityManager.NetworkCallback() {
 
             override fun onAvailable(network: Network) {
                 super.onAvailable(network)
 
-                // Trigger ONLY if the app previously detected
-                // that the device was offline.
-                if (wasOffline) {
-
+                // Trigger reconciliation if the device just transitioned from offline -> online
+                // OR if a pending FCM/offline sync was queued while disconnected.
+                if (wasOffline || FirestoreSyncManager.hasPendingSync(appContext)) {
                     wasOffline = false
-
                     onReconnected()
                 }
             }
 
-
             override fun onLost(network: Network) {
                 super.onLost(network)
 
-                // Check whether there is really no usable
-                // internet connection remaining.
                 if (!isInternetAvailable()) {
                     wasOffline = true
                 }
             }
         }
 
-
     fun start() {
-
         if (isRegistered) {
             return
         }
-
-        // IMPORTANT:
-        // If the app starts while already online,
-        // DO NOT trigger automatic sync.
-        //
-        // Automatic sync should only happen after:
-        //
-        // ONLINE -> OFFLINE -> ONLINE
 
         wasOffline = !isInternetAvailable()
 
@@ -72,19 +58,15 @@ class NetworkMonitor(
         isRegistered = true
     }
 
-
     fun stop() {
-
         if (!isRegistered) {
             return
         }
 
         try {
-
             connectivityManager.unregisterNetworkCallback(
                 networkCallback
             )
-
         } catch (_: Exception) {
             // Ignore if callback is already unregistered.
         }
@@ -92,23 +74,19 @@ class NetworkMonitor(
         isRegistered = false
     }
 
-
     private fun isInternetAvailable(): Boolean {
-
         val network =
             connectivityManager.activeNetwork
                 ?: return false
 
         val capabilities =
-            connectivityManager.getNetworkCapabilities(
-                network
-            ) ?: return false
+            connectivityManager.getNetworkCapabilities(network)
+                ?: return false
 
         return capabilities.hasCapability(
             NetworkCapabilities.NET_CAPABILITY_INTERNET
-        ) &&
-                capabilities.hasCapability(
-                    NetworkCapabilities.NET_CAPABILITY_VALIDATED
-                )
+        ) && capabilities.hasCapability(
+            NetworkCapabilities.NET_CAPABILITY_VALIDATED
+        )
     }
 }

@@ -8,187 +8,131 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-
+import androidx.core.content.ContextCompat
 
 class NotificationHelper(
-    private val context: Context
+    context: Context
 ) {
 
+    private val appContext = context.applicationContext
+
     companion object {
+        private const val TAG = "NotificationHelper"
 
-        const val CHANNEL_ID =
-            "transaction_updates_channel"
-
-        const val CHANNEL_NAME =
-            "Transaction Updates"
-
+        const val CHANNEL_ID = ERequestApplication.UPDATES_CHANNEL_ID
+        const val CHANNEL_NAME = "E-Request Updates"
         const val CHANNEL_DESCRIPTION =
-            "Notifications when transaction information is updated"
+            "Notifications for updated school transactions and campus announcements."
     }
 
-
-    // =====================================================
-    // CREATE NOTIFICATION CHANNEL
-    // =====================================================
-
-    private fun createNotificationChannel() {
-
+    fun ensureNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            val channel =
-                NotificationChannel(
-                    CHANNEL_ID,
-                    CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-
-                    description =
-                        CHANNEL_DESCRIPTION
-                }
-
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = CHANNEL_DESCRIPTION
+            }
 
             val notificationManager =
-                context.getSystemService(
-                    Context.NOTIFICATION_SERVICE
-                ) as NotificationManager
-
-
-            notificationManager.createNotificationChannel(
-                channel
-            )
+                appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
+    fun canPostNotifications(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                appContext,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            NotificationManagerCompat.from(appContext).areNotificationsEnabled()
+        }
+    }
 
-    // =====================================================
-    // SHOW TRANSACTION UPDATE NOTIFICATION
-    // =====================================================
+    suspend fun dispatchUnnotifiedUpdates(dao: ERequestDao) {
+        if (!canPostNotifications()) {
+            return
+        }
+
+        val pendingNotifications = dao.getUnnotifiedUpdateNotifications()
+        for (entity in pendingNotifications) {
+            val dispatched = showTransactionUpdateNotification(
+                notificationKey = entity.transactionId.ifBlank { entity.id },
+                transactionId = entity.transactionId,
+                transactionName = entity.transactionName,
+                serviceName = entity.serviceName,
+                updatedSection = entity.updatedSection,
+                notificationMessage = entity.message
+            )
+            if (dispatched) {
+                dao.markUpdateNotificationAsNotified(entity.id)
+            }
+        }
+    }
 
     fun showTransactionUpdateNotification(
-        notificationId: Int,
+        notificationKey: String,
         transactionId: String,
         transactionName: String,
         serviceName: String,
         updatedSection: String,
         notificationMessage: String
-    ) {
+    ): Boolean {
+        ensureNotificationChannel()
 
-        createNotificationChannel()
+        if (!canPostNotifications()) {
+            return false
+        }
 
-
-        // =================================================
-        // OPEN TRANSACTION DETAILS WHEN TAPPED
-        // =================================================
-
-        val intent =
-            Intent(
-                context,
-                TransactionDetailsActivity::class.java
-            ).apply {
-
-                putExtra(
-                    "TRANSACTION_ID",
-                    transactionId
-                )
-
-                putExtra(
-                    "TRANSACTION_NAME",
-                    transactionName
-                )
-
-                putExtra(
-                    "SERVICE_NAME",
-                    serviceName
-                )
-
-                // Tells TransactionDetailsActivity
-                // which section should be opened.
-                putExtra(
-                    "TARGET_SECTION",
-                    updatedSection
-                )
-
-                flags =
-                    Intent.FLAG_ACTIVITY_NEW_TASK or
-                            Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val intent = if (transactionId.isNotBlank()) {
+            Intent(appContext, TransactionDetailsActivity::class.java).apply {
+                putExtra("TRANSACTION_ID", transactionId)
+                putExtra("TRANSACTION_NAME", transactionName)
+                putExtra("SERVICE_NAME", serviceName)
+                putExtra("TARGET_SECTION", updatedSection)
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
+        } else {
+            Intent(appContext, HomeActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+        }
 
+        val notificationId = notificationKey.hashCode()
 
-        // =================================================
-        // PENDING INTENT
-        // =================================================
+        val pendingIntent = PendingIntent.getActivity(
+            appContext,
+            notificationId,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
-        val pendingIntent =
-            PendingIntent.getActivity(
-                context,
-                notificationId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                        PendingIntent.FLAG_IMMUTABLE
-            )
+        val title = transactionName.ifBlank { "E-ReQuest Update" }
 
+        val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(notificationMessage)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationMessage))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(pendingIntent)
+            .build()
 
-        // =================================================
-        // CREATE NOTIFICATION
-        // =================================================
-
-        val notification =
-            NotificationCompat.Builder(
-                context,
-                CHANNEL_ID
-            )
-                .setSmallIcon(
-                    android.R.drawable.ic_dialog_info
-                )
-                .setContentTitle(
-                    transactionName
-                )
-                .setContentText(
-                    notificationMessage
-                )
-                .setStyle(
-                    NotificationCompat.BigTextStyle()
-                        .bigText(
-                            "$serviceName\n$notificationMessage"
-                        )
-                )
-                .setPriority(
-                    NotificationCompat.PRIORITY_HIGH
-                )
-                .setAutoCancel(
-                    true
-                )
-                .setContentIntent(
-                    pendingIntent
-                )
-                .build()
-
-
-        // =================================================
-        // CHECK PERMISSION
-        // =================================================
-
-        val hasPermission =
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                    context.checkSelfPermission(
-                        Manifest.permission.POST_NOTIFICATIONS
-                    ) == PackageManager.PERMISSION_GRANTED
-
-
-        // =================================================
-        // SHOW NOTIFICATION
-        // =================================================
-
-        if (hasPermission) {
-
-            NotificationManagerCompat
-                .from(context)
-                .notify(
-                    notificationId,
-                    notification
-                )
+        return try {
+            NotificationManagerCompat.from(appContext).notify(notificationId, notification)
+            true
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Unable to post notification due to missing permission.", e)
+            false
         }
     }
 }

@@ -12,16 +12,21 @@ import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.animation.LinearInterpolator
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -41,11 +46,13 @@ class HomeActivity : AppCompatActivity() {
     private val notificationPermissionLauncher =
         registerForActivityResult(
             ActivityResultContracts.RequestPermission()
-        ) { }
-
-    // IDs already shown as Android system notifications during this activity session.
-    private val shownSystemNotificationIds =
-        mutableSetOf<String>()
+        ) { isGranted ->
+            if (isGranted && ::dao.isInitialized) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    NotificationHelper(this@HomeActivity).dispatchUnnotifiedUpdates(dao)
+                }
+            }
+        }
 
 
 
@@ -115,6 +122,79 @@ class HomeActivity : AppCompatActivity() {
     private var syncAnimator: ObjectAnimator? = null
 
     private var isSyncing = false
+
+    private var activeBannerView: TextView? = null
+    private var dismissBannerRunnable: Runnable? = null
+
+    private val backgroundSyncCompletionListener: () -> Unit = {
+        if (!isFinishing && !isDestroyed && ::dao.isInitialized) {
+            loadSearchData()
+            displayUpdateNotifications()
+            displayImportantAnnouncements()
+            updateConnectionStatus()
+        }
+    }
+
+    private fun showSingleToast(
+        message: String,
+        duration: Int = Toast.LENGTH_SHORT
+    ) {
+        val rootView = findViewById<ViewGroup>(android.R.id.content) ?: return
+
+        dismissBannerRunnable?.let { rootView.removeCallbacks(it) }
+        activeBannerView?.let { existing ->
+            existing.animate().cancel()
+            rootView.removeView(existing)
+        }
+
+        val banner = TextView(this).apply {
+            text = message
+            textSize = 13.5f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setPadding(20.dp(), 11.dp(), 20.dp(), 11.dp())
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = 24.dp().toFloat()
+                setColor(0xE6323232.toInt())
+            }
+            elevation = 6.dp().toFloat()
+            alpha = 0f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = 88.dp()
+                leftMargin = 24.dp()
+                rightMargin = 24.dp()
+            }
+        }
+
+        rootView.addView(banner)
+        activeBannerView = banner
+
+        banner.animate()
+            .alpha(1f)
+            .setDuration(180L)
+            .start()
+
+        val displayMillis = if (duration == Toast.LENGTH_LONG) 3200L else 2000L
+        val runnable = Runnable {
+            banner.animate()
+                .alpha(0f)
+                .setDuration(180L)
+                .withEndAction {
+                    rootView.removeView(banner)
+                    if (activeBannerView === banner) {
+                        activeBannerView = null
+                    }
+                }
+                .start()
+        }
+        dismissBannerRunnable = runnable
+        rootView.postDelayed(runnable, displayMillis)
+    }
 
     // =====================================================
     // ON CREATE
@@ -217,13 +297,15 @@ class HomeActivity : AppCompatActivity() {
 
                     updateConnectionStatus()
 
-                    if (!isSyncing) {
-                        syncData()
+                    if (
+                        !isSyncing &&
+                        !FirestoreSyncManager.isCurrentlySyncing() &&
+                        !FirestoreSyncManager.wasSyncedRecently()
+                    ) {
+                        syncData(isSilent = true)
                     }
                 }
             }
-
-        networkMonitor.start()
 
         // =================================================
         // FIRESTORE REAL-TIME UPDATE LISTENER
@@ -239,12 +321,10 @@ class HomeActivity : AppCompatActivity() {
                         !isSyncing
                     ) {
 
-                        syncData()
+                        syncData(isSilent = true)
                     }
                 }
             }
-
-        firestoreUpdateListener.start()
 
         // =================================================
         // LOAD SAVED ROOM DATA
@@ -270,7 +350,7 @@ class HomeActivity : AppCompatActivity() {
 
             if (!isSyncing) {
 
-                syncData()
+                syncData(isSilent = false)
             }
         }
 
@@ -292,6 +372,7 @@ class HomeActivity : AppCompatActivity() {
                 )
 
             startActivity(intent)
+            finish()
         }
 
         navProgress.setOnClickListener {
@@ -303,7 +384,44 @@ class HomeActivity : AppCompatActivity() {
                 )
 
             startActivity(intent)
+            finish()
         }
+    }
+
+    // =====================================================
+    // LIFECYCLE MANAGEMENT FOR ACTIVE LISTENERS
+    // =====================================================
+
+    override fun onStart() {
+        super.onStart()
+
+        FirestoreSyncManager.registerSyncCompletionListener(
+            backgroundSyncCompletionListener
+        )
+
+        if (::networkMonitor.isInitialized) {
+            networkMonitor.start()
+        }
+
+        if (::firestoreUpdateListener.isInitialized) {
+            firestoreUpdateListener.start()
+        }
+    }
+
+    override fun onStop() {
+        FirestoreSyncManager.unregisterSyncCompletionListener(
+            backgroundSyncCompletionListener
+        )
+
+        if (::networkMonitor.isInitialized) {
+            networkMonitor.stop()
+        }
+
+        if (::firestoreUpdateListener.isInitialized) {
+            firestoreUpdateListener.stop()
+        }
+
+        super.onStop()
     }
 
     // =====================================================
@@ -325,6 +443,17 @@ class HomeActivity : AppCompatActivity() {
         if (::tvConnectionStatus.isInitialized) {
 
             updateConnectionStatus()
+        }
+
+        // Whenever user returns to Home, silently reconcile online updates/deletions in the background
+        // only if no sync is currently running and no sync completed within the recent cooldown window.
+        if (
+            isInternetAvailable() &&
+            !isSyncing &&
+            !FirestoreSyncManager.isCurrentlySyncing() &&
+            !FirestoreSyncManager.wasSyncedRecently()
+        ) {
+            syncData(isSilent = true)
         }
     }
 
@@ -672,13 +801,8 @@ class HomeActivity : AppCompatActivity() {
 
                 val updates =
                     withContext(Dispatchers.IO) {
-
                         updateManager.getUnread()
                     }
-
-                showNewSystemNotifications(
-                    updates
-                )
 
                 updateNotificationsContainer
                     .removeAllViews()
@@ -701,18 +825,29 @@ class HomeActivity : AppCompatActivity() {
                     }
 
                 // =================================================
-                // EMPTY MESSAGE
+                // EMPTY MESSAGE & BANNER VISIBILITY
                 // =================================================
 
-                tvNoUpdateNotifications.visibility =
-                    if (updates.isEmpty()) {
+                if (updates.isEmpty()) {
 
+                    tvNoUpdateNotifications.visibility =
                         View.VISIBLE
 
-                    } else {
-
+                    updateNotificationsScrollView.visibility =
                         View.GONE
-                    }
+
+                    resetScrollableSectionHeight(
+                        updateNotificationsScrollView
+                    )
+
+                    return@launch
+                }
+
+                tvNoUpdateNotifications.visibility =
+                    View.GONE
+
+                updateNotificationsScrollView.visibility =
+                    View.VISIBLE
 
                 // =================================================
                 // DISPLAY EACH NOTIFICATION
@@ -947,6 +1082,13 @@ class HomeActivity : AppCompatActivity() {
 
                 tvNoUpdateNotifications.visibility =
                     View.VISIBLE
+
+                updateNotificationsScrollView.visibility =
+                    View.GONE
+
+                resetScrollableSectionHeight(
+                    updateNotificationsScrollView
+                )
             }
         }
     }
@@ -1211,6 +1353,10 @@ class HomeActivity : AppCompatActivity() {
 
                 tvNoImportantAnnouncements.visibility =
                     View.VISIBLE
+
+                resetScrollableSectionHeight(
+                    importantAnnouncementsScrollView
+                )
             }
         }
     }
@@ -1219,15 +1365,14 @@ class HomeActivity : AppCompatActivity() {
     // ACTUAL FIRESTORE → ROOM REFRESH
     // =====================================================
 
-    private fun syncData() {
+    private fun syncData(isSilent: Boolean = false) {
 
         if (isSyncing) {
-
             return
         }
 
-        isSyncing =
-            true
+        isSyncing = true
+        btnSync.isEnabled = false
 
         startRefreshAnimation()
 
@@ -1241,20 +1386,15 @@ class HomeActivity : AppCompatActivity() {
 
             stopRefreshAnimation()
 
-            Toast.makeText(
-                this,
-                "No internet connection. Showing saved information.",
-                Toast.LENGTH_SHORT
-            ).show()
+            if (!isSilent) {
+                showSingleToast(
+                    "No internet connection. Showing saved information.",
+                    Toast.LENGTH_SHORT
+                )
+            }
 
             return
         }
-
-        Toast.makeText(
-            this,
-            "Checking for updates...",
-            Toast.LENGTH_SHORT
-        ).show()
 
         // =================================================
         // FIRESTORE → ROOM
@@ -1310,21 +1450,9 @@ class HomeActivity : AppCompatActivity() {
 
                 updateConnectionStatus()
 
-                Toast.makeText(
-                    this@HomeActivity,
-                    "Latest information downloaded.",
-                    Toast.LENGTH_SHORT
-                ).show()
-
             } catch (e: Exception) {
 
                 e.printStackTrace()
-
-                Toast.makeText(
-                    this@HomeActivity,
-                    "Unable to sync. Saved information is still available.",
-                    Toast.LENGTH_LONG
-                ).show()
 
             } finally {
 
@@ -1339,30 +1467,10 @@ class HomeActivity : AppCompatActivity() {
 
     private fun startRefreshAnimation() {
 
-        syncAnimator?.cancel()
-
-        syncAnimator =
-            ObjectAnimator.ofFloat(
-                btnSync,
-                "rotation",
-                0f,
-                360f
-            ).apply {
-
-                duration =
-                    700
-
-                repeatCount =
-                    ValueAnimator.INFINITE
-
-                repeatMode =
-                    ValueAnimator.RESTART
-
-                interpolator =
-                    LinearInterpolator()
-
-                start()
-            }
+        btnSync.animate()
+            .rotationBy(360f)
+            .setDuration(700L)
+            .start()
     }
 
     // =====================================================
@@ -1371,13 +1479,8 @@ class HomeActivity : AppCompatActivity() {
 
     private fun stopRefreshAnimation() {
 
-        syncAnimator?.cancel()
-
-        syncAnimator =
-            null
-
-        btnSync.rotation =
-            0f
+        btnSync.isEnabled =
+            true
 
         isSyncing =
             false
@@ -1479,124 +1582,6 @@ class HomeActivity : AppCompatActivity() {
     }
 
 
-    private fun showNewSystemNotifications(
-        updates: List<UpdateNotification>
-    ) {
-
-        updates.forEach { update ->
-
-            if (
-                shownSystemNotificationIds.add(
-                    update.id
-                )
-            ) {
-                showSystemNotification(
-                    update
-                )
-            }
-        }
-    }
-
-
-    private fun showSystemNotification(
-        update: UpdateNotification
-    ) {
-
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-
-        val intent =
-            Intent(
-                this,
-                TransactionDetailsActivity::class.java
-            ).apply {
-
-                putExtra(
-                    "TRANSACTION_ID",
-                    update.transactionId
-                )
-
-                putExtra(
-                    "TRANSACTION_NAME",
-                    update.transactionName
-                )
-
-                putExtra(
-                    "SERVICE_NAME",
-                    update.serviceName
-                )
-
-                putExtra(
-                    "TARGET_SECTION",
-                    update.updatedSection
-                )
-
-                flags =
-                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                            Intent.FLAG_ACTIVITY_SINGLE_TOP
-            }
-
-        val pendingIntent =
-            PendingIntent.getActivity(
-                this,
-                update.id.hashCode(),
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or
-                        PendingIntent.FLAG_IMMUTABLE
-            )
-
-        val notification =
-            NotificationCompat.Builder(
-                this,
-                ERequestApplication.UPDATES_CHANNEL_ID
-            )
-                .setSmallIcon(
-                    R.mipmap.ic_launcher
-                )
-                .setContentTitle(
-                    update.transactionName
-                        .ifBlank {
-                            "E-Request Update"
-                        }
-                )
-                .setContentText(
-                    update.message
-                )
-                .setStyle(
-                    NotificationCompat
-                        .BigTextStyle()
-                        .bigText(
-                            update.message
-                        )
-                )
-                .setPriority(
-                    NotificationCompat.PRIORITY_HIGH
-                )
-                .setCategory(
-                    NotificationCompat.CATEGORY_STATUS
-                )
-                .setAutoCancel(true)
-                .setContentIntent(
-                    pendingIntent
-                )
-                .build()
-
-        NotificationManagerCompat
-            .from(this)
-            .notify(
-                update.id.hashCode(),
-                notification
-            )
-    }
-
-
     // =====================================================
     // LIMIT HOME SECTIONS TO 3 VISIBLE CARDS
     // =====================================================
@@ -1618,26 +1603,47 @@ class HomeActivity : AppCompatActivity() {
                 return@post
             }
 
-            var targetHeight = 0
+            // Ensure container has a valid non-zero width before measuring children
+            if (container.width == 0) {
+                container.viewTreeObserver.addOnGlobalLayoutListener(
+                    object : ViewTreeObserver.OnGlobalLayoutListener {
+                        override fun onGlobalLayout() {
+                            container.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                            updateScrollableSectionHeight(
+                                scrollView,
+                                container,
+                                visibleItemCount
+                            )
+                        }
+                    }
+                )
+                return@post
+            }
 
-            for (index in 0 until visibleItemCount) {
+            var targetHeight = 0
+            val countToMeasure = minOf(visibleItemCount, container.childCount)
+
+            for (index in 0 until countToMeasure) {
 
                 val child =
-                    container.getChildAt(index)
+                    container.getChildAt(index) ?: continue
 
-                if (child.measuredHeight == 0) {
-
-                    child.measure(
-                        View.MeasureSpec.makeMeasureSpec(
-                            container.width,
-                            View.MeasureSpec.EXACTLY
-                        ),
-                        View.MeasureSpec.makeMeasureSpec(
-                            0,
-                            View.MeasureSpec.UNSPECIFIED
-                        )
+                val widthSpec =
+                    View.MeasureSpec.makeMeasureSpec(
+                        container.width,
+                        View.MeasureSpec.EXACTLY
                     )
-                }
+
+                val heightSpec =
+                    View.MeasureSpec.makeMeasureSpec(
+                        0,
+                        View.MeasureSpec.UNSPECIFIED
+                    )
+
+                child.measure(
+                    widthSpec,
+                    heightSpec
+                )
 
                 targetHeight +=
                     child.measuredHeight
@@ -1655,14 +1661,15 @@ class HomeActivity : AppCompatActivity() {
                 }
             }
 
-            scrollView.layoutParams =
-                scrollView.layoutParams.apply {
-
-                    height =
-                        targetHeight
+            if (targetHeight > 0) {
+                if (scrollView.layoutParams.height != targetHeight) {
+                    scrollView.layoutParams =
+                        scrollView.layoutParams.apply {
+                            height = targetHeight
+                        }
+                    scrollView.requestLayout()
                 }
-
-            scrollView.requestLayout()
+            }
         }
     }
 
@@ -1671,14 +1678,13 @@ class HomeActivity : AppCompatActivity() {
         scrollView: ScrollView
     ) {
 
-        scrollView.layoutParams =
-            scrollView.layoutParams.apply {
-
-                height =
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-            }
-
-        scrollView.requestLayout()
+        if (scrollView.layoutParams.height != ViewGroup.LayoutParams.WRAP_CONTENT) {
+            scrollView.layoutParams =
+                scrollView.layoutParams.apply {
+                    height = ViewGroup.LayoutParams.WRAP_CONTENT
+                }
+            scrollView.requestLayout()
+        }
     }
 
 
@@ -1702,7 +1708,17 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onDestroy() {
 
+        val rootView = findViewById<ViewGroup>(android.R.id.content)
+        dismissBannerRunnable?.let { rootView?.removeCallbacks(it) }
+        dismissBannerRunnable = null
+        activeBannerView?.let { rootView?.removeView(it) }
+        activeBannerView = null
+
         syncAnimator?.cancel()
+
+        FirestoreSyncManager.unregisterSyncCompletionListener(
+            backgroundSyncCompletionListener
+        )
 
         if (::networkMonitor.isInitialized) {
             networkMonitor.stop()

@@ -1,11 +1,16 @@
 package com.example.request
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.room.withTransaction
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -14,11 +19,67 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 class FirestoreSyncManager(
     private val context: Context
 ) {
+
+    companion object {
+        private val syncMutex = Mutex()
+        private val isSyncInProgress = AtomicBoolean(false)
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private val syncCompletionListeners = CopyOnWriteArraySet<() -> Unit>()
+
+        @Volatile
+        private var lastSyncCompletedAtMillis: Long = 0L
+
+        private const val SYNC_PREFS_NAME = "ERequestSyncPrefs"
+        private const val KEY_PENDING_SYNC = "pending_sync_required"
+
+        fun isCurrentlySyncing(): Boolean = isSyncInProgress.get()
+
+        fun wasSyncedRecently(cooldownMs: Long = 3000L): Boolean {
+            val elapsed = System.currentTimeMillis() - lastSyncCompletedAtMillis
+            return lastSyncCompletedAtMillis > 0L && elapsed in 0..cooldownMs
+        }
+
+        fun registerSyncCompletionListener(listener: () -> Unit) {
+            syncCompletionListeners.add(listener)
+        }
+
+        fun unregisterSyncCompletionListener(listener: () -> Unit) {
+            syncCompletionListeners.remove(listener)
+        }
+
+        private fun notifySyncCompleted() {
+            mainHandler.post {
+                syncCompletionListeners.forEach { listener ->
+                    try {
+                        listener.invoke()
+                    } catch (e: Exception) {
+                        Log.e("FirestoreSyncManager", "Error in sync completion listener", e)
+                    }
+                }
+            }
+        }
+
+        fun setPendingSync(context: Context, isPending: Boolean) {
+            context.applicationContext
+                .getSharedPreferences(SYNC_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(KEY_PENDING_SYNC, isPending)
+                .apply()
+        }
+
+        fun hasPendingSync(context: Context): Boolean {
+            return context.applicationContext
+                .getSharedPreferences(SYNC_PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_PENDING_SYNC, false)
+        }
+    }
 
     private val firestore =
         FirebaseFirestore.getInstance()
@@ -66,55 +127,127 @@ class FirestoreSyncManager(
     // =====================================================
 
     suspend fun syncAllData() {
-
-        parsingErrors.clear()
-
-        // Sync services first so transaction notifications can
-        // resolve the correct service name.
-        syncServices()
-
-        // Collect every transaction affected during this sync.
-        // A MutableSet guarantees one notification per transaction,
-        // even when several sections were changed.
-        val affectedTransactionIds =
-            mutableSetOf<String>()
-
-        affectedTransactionIds.addAll(
-            syncTransactions()
-        )
-
-        affectedTransactionIds.addAll(
-            syncRequirements()
-        )
-
-        affectedTransactionIds.addAll(
-            syncProcedureSteps()
-        )
-
-        affectedTransactionIds.addAll(
-            syncDepartmentGuidelines()
-        )
-
-        syncAnnouncements()
-
-        // Create exactly ONE unread notification for each
-        // affected school transaction.
-        affectedTransactionIds.forEach {
-                transactionId ->
-
-            createTransactionUpdateNotification(
-                transactionId = transactionId,
-                updatedSection = "transaction",
-                message =
-                    "Recent information for this transaction has been updated."
-            )
+        // If another sync is currently running, wait for it to finish writing to Room
+        // instead of returning prematurely before Room has the updated notifications.
+        if (!isSyncInProgress.compareAndSet(false, true)) {
+            Log.d("FirestoreSyncManager", "Sync already in progress; awaiting completion of active sync.")
+            syncMutex.withLock {
+                // Active sync has now completed and Room is up to date.
+            }
+            return
         }
 
-        if (parsingErrors.isNotEmpty()) {
-            throw IllegalStateException(
-                "Synchronization completed with ${parsingErrors.size} document parsing error(s):\n" +
-                        parsingErrors.joinToString("\n")
-            )
+        try {
+            syncMutex.withLock {
+                parsingErrors.clear()
+
+                val changedTransactionInfoIds = mutableSetOf<String>()
+                val changedRequirementTxIds = mutableSetOf<String>()
+                val changedProcedureTxIds = mutableSetOf<String>()
+                val changedGuidelineTxIds = mutableSetOf<String>()
+
+                val syncErrors = mutableListOf<Throwable>()
+
+                runCatching {
+                    syncServices()
+                }.onFailure { e ->
+                    Log.e("FirestoreSyncManager", "syncServices failed: ${e.message}", e)
+                    syncErrors.add(e)
+                }
+
+                runCatching {
+                    changedTransactionInfoIds.addAll(syncTransactions())
+                }.onFailure { e ->
+                    Log.e("FirestoreSyncManager", "syncTransactions failed: ${e.message}", e)
+                    syncErrors.add(e)
+                }
+
+                runCatching {
+                    changedRequirementTxIds.addAll(syncRequirements())
+                }.onFailure { e ->
+                    Log.e("FirestoreSyncManager", "syncRequirements failed: ${e.message}", e)
+                    syncErrors.add(e)
+                }
+
+                runCatching {
+                    changedProcedureTxIds.addAll(syncProcedureSteps())
+                }.onFailure { e ->
+                    Log.e("FirestoreSyncManager", "syncProcedureSteps failed: ${e.message}", e)
+                    syncErrors.add(e)
+                }
+
+                runCatching {
+                    changedGuidelineTxIds.addAll(syncDepartmentGuidelines())
+                }.onFailure { e ->
+                    Log.e("FirestoreSyncManager", "syncDepartmentGuidelines failed: ${e.message}", e)
+                    syncErrors.add(e)
+                }
+
+                runCatching {
+                    syncAnnouncements()
+                }.onFailure { e ->
+                    Log.e("FirestoreSyncManager", "syncAnnouncements failed: ${e.message}", e)
+                    syncErrors.add(e)
+                }
+
+                val affectedTransactionIds = mutableSetOf<String>().apply {
+                    addAll(changedTransactionInfoIds)
+                    addAll(changedRequirementTxIds)
+                    addAll(changedProcedureTxIds)
+                    addAll(changedGuidelineTxIds)
+                }
+
+                // Create or update a single deduplicated unread notification
+                // for each affected school transaction.
+                affectedTransactionIds.forEach { transactionId ->
+                    val inTx = transactionId in changedTransactionInfoIds
+                    val inReq = transactionId in changedRequirementTxIds
+                    val inProc = transactionId in changedProcedureTxIds
+                    val inGuide = transactionId in changedGuidelineTxIds
+
+                    val sectionCount = listOf(inTx, inReq, inProc, inGuide).count { it }
+
+                    val (targetSection, updateMessage) = when {
+                        sectionCount > 1 -> "ABOUT" to "Recent information for this transaction has been updated."
+                        inReq -> "REQUIREMENTS" to "The requirements for this transaction have been updated."
+                        inProc -> "PROCEDURE" to "The step-by-step procedure for this transaction has been updated."
+                        inGuide -> "DEPARTMENT_GUIDELINES" to "The department guidelines for this transaction have been updated."
+                        else -> "ABOUT" to "Recent information for this transaction has been updated."
+                    }
+
+                    createTransactionUpdateNotification(
+                        transactionId = transactionId,
+                        updatedSection = targetSection,
+                        message = updateMessage
+                    )
+                }
+
+                // Dispatch local NotificationCompat alerts once for any unnotified updates
+                // and persist isNotified = 1 in Room without clearing isRead = 0.
+                NotificationHelper(context).dispatchUnnotifiedUpdates(dao)
+
+                if (parsingErrors.isNotEmpty()) {
+                    setPendingSync(context, true)
+                    throw IllegalStateException(
+                        "Synchronization completed with ${parsingErrors.size} document parsing error(s):\n" +
+                                parsingErrors.joinToString("\n")
+                    )
+                }
+
+                if (syncErrors.isNotEmpty()) {
+                    setPendingSync(context, true)
+                    throw IllegalStateException(
+                        "Synchronization encountered ${syncErrors.size} step error(s):\n" +
+                                syncErrors.joinToString("\n") { it.message ?: it.javaClass.simpleName }
+                    )
+                }
+
+                setPendingSync(context, false)
+                lastSyncCompletedAtMillis = System.currentTimeMillis()
+            }
+        } finally {
+            isSyncInProgress.set(false)
+            notifySyncCompleted()
         }
     }
 
@@ -215,6 +348,17 @@ class FirestoreSyncManager(
 
     private suspend fun syncTransactions(): Set<String> {
 
+        val localBeforeSync =
+            dao.getAllTransactionsForSync()
+
+        val hadLocalData =
+            localBeforeSync.isNotEmpty()
+
+        val localById =
+            localBeforeSync.associateBy {
+                it.id
+            }
+
         val snapshot =
             firestore
                 .collection("transactions")
@@ -269,35 +413,38 @@ class FirestoreSyncManager(
                         )
 
                     val oldTransaction =
-                        dao.getTransaction(
-                            newTransaction.id
-                        )
+                        localById[newTransaction.id]
 
-                    if (oldTransaction != null) {
+                    if (hadLocalData) {
+
+                        val isAdded =
+                            oldTransaction == null && newTransaction.isActive
 
                         val hasChanged =
-                            oldTransaction.serviceId !=
-                                    newTransaction.serviceId ||
+                            oldTransaction != null && (
+                                    oldTransaction.serviceId !=
+                                            newTransaction.serviceId ||
 
-                                    oldTransaction.name !=
-                                    newTransaction.name ||
+                                            oldTransaction.name !=
+                                            newTransaction.name ||
 
-                                    oldTransaction.description !=
-                                    newTransaction.description ||
+                                            oldTransaction.description !=
+                                            newTransaction.description ||
 
-                                    oldTransaction.officeName !=
-                                    newTransaction.officeName ||
+                                            oldTransaction.officeName !=
+                                            newTransaction.officeName ||
 
-                                    oldTransaction.officeSchedule !=
-                                    newTransaction.officeSchedule ||
+                                            oldTransaction.officeSchedule !=
+                                            newTransaction.officeSchedule ||
 
-                                    oldTransaction.isActive !=
-                                    newTransaction.isActive ||
+                                            oldTransaction.isActive !=
+                                            newTransaction.isActive ||
 
-                                    oldTransaction.updatedAt !=
-                                    newTransaction.updatedAt
+                                            oldTransaction.updatedAt !=
+                                            newTransaction.updatedAt
+                                    )
 
-                        if (hasChanged) {
+                        if (isAdded || hasChanged) {
 
                             changedTransactionIds.add(
                                 newTransaction.id
@@ -519,8 +666,22 @@ class FirestoreSyncManager(
                     Date(currentTime)
                 )
 
+            // Check if an unread notification already exists for this transaction
+            // (e.g., created by an incoming FCM push payload or a prior unacknowledged update).
+            val existingUnread =
+                dao.getUnreadNotificationByTransaction(transaction.id)
+
             val notificationId =
-                "${updatedSection}_${transactionId}_$currentTime"
+                existingUnread?.id ?: "tx_update_${transaction.id}"
+
+            // Preserve isNotified = true only if an incoming FCM push just created this
+            // unread notification within the last 15 seconds for the same update event.
+            // Any newly detected Firestore diff keeps isRead = false (for the in-app banner)
+            // and sets isNotified = false so the system tray fires once for this new update.
+            val wasJustNotifiedByFcm =
+                existingUnread != null &&
+                    existingUnread.isNotified &&
+                    (currentTime - existingUnread.createdAt) in 0..15_000L
 
             val notification =
                 UpdateNotificationEntity(
@@ -532,6 +693,7 @@ class FirestoreSyncManager(
                     message = message,
                     dateTime = formattedDate,
                     isRead = false,
+                    isNotified = wasJustNotifiedByFcm,
                     createdAt = currentTime
                 )
 
@@ -966,7 +1128,7 @@ class FirestoreSyncManager(
 
 
                 // -----------------------------------------
-                // SAFE FILE NAME
+                // SAFE FILE NAME (PRESERVE ORIGINAL FORMAT)
                 // -----------------------------------------
 
                 val safeStepId =
@@ -977,16 +1139,8 @@ class FirestoreSyncManager(
                         "_"
                     )
 
-
-                val imageFile =
-                    File(
-                        imageDirectory,
-                        "${safeStepId}_${System.currentTimeMillis()}.img"
-                    )
-
-
                 // -----------------------------------------
-                // CONNECT TO CLOUDINARY
+                // CONNECT TO REMOTE IMAGE URL
                 // -----------------------------------------
 
                 val url =
@@ -1030,6 +1184,30 @@ class FirestoreSyncManager(
 
                     return@withContext null
                 }
+
+                val urlExtension =
+                    url.path
+                        .substringAfterLast('.', "")
+                        .lowercase(Locale.ROOT)
+                        .takeIf { it in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp") }
+
+                val contentTypeExtension =
+                    when (connection.contentType?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)) {
+                        "image/png" -> "png"
+                        "image/jpeg", "image/jpg" -> "jpg"
+                        "image/webp" -> "webp"
+                        "image/gif" -> "gif"
+                        "image/bmp" -> "bmp"
+                        else -> null
+                    }
+
+                val extension = urlExtension ?: contentTypeExtension ?: "img"
+
+                val imageFile =
+                    File(
+                        imageDirectory,
+                        "${safeStepId}_${System.currentTimeMillis()}.$extension"
+                    )
 
 
                 // -----------------------------------------
@@ -1238,39 +1416,32 @@ class FirestoreSyncManager(
     // IMPORTANT ANNOUNCEMENTS
     // =====================================================
 
-    private suspend fun syncAnnouncements() {
+    suspend fun syncAnnouncements() {
 
-        val snapshot =
+        val snapshot = try {
+            firestore
+                .collection("announcements")
+                .get(Source.SERVER)
+                .await()
+        } catch (e: Exception) {
+            Log.w(
+                "FirestoreSyncManager",
+                "Failed to fetch announcements from SERVER, falling back to default source: ${e.message}"
+            )
             firestore
                 .collection("announcements")
                 .get()
                 .await()
-
-        // Get IDs that currently exist in Firestore.
-        val firestoreAnnouncementIds =
-            snapshot.documents
-                .map { document ->
-                    document.id
-                }
-                .toSet()
-
-        // Get all local announcements, including inactive records.
-        val localAnnouncements =
-            dao.getAllAnnouncements()
-
-        // Remove Room records that were permanently deleted in Firestore.
-        localAnnouncements.forEach { localAnnouncement ->
-
-            if (
-                localAnnouncement.id !in
-                firestoreAnnouncementIds
-            ) {
-
-                dao.deleteAnnouncementById(
-                    localAnnouncement.id
-                )
-            }
         }
+
+        val isFromCache = snapshot.metadata.isFromCache
+        val hasPendingWrites = snapshot.metadata.hasPendingWrites()
+        val isServerConfirmed = !isFromCache && !hasPendingWrites
+
+        // Read all local announcements (including inactive) before synchronizing
+        val localBeforeSync = dao.getAllAnnouncements()
+
+        var hasParsingErrors = false
 
         // Convert current Firestore records to Room entities.
         val announcements =
@@ -1322,18 +1493,45 @@ class FirestoreSyncManager(
 
                 } catch (e: Exception) {
 
-                    e.printStackTrace()
+                    hasParsingErrors = true
+                    Log.e("FirestoreSyncManager", "Parsing failed for announcement '${document.id}': ${e.message}", e)
+                    recordParsingError("announcements", document.id, e)
 
                     null
                 }
             }
 
-        // Insert/update records that still exist in Firestore.
-        if (announcements.isNotEmpty()) {
+        // Deletions are only safely reconciled when:
+        // 1. Snapshot is server-confirmed (not cached or pending local writes)
+        // 2. No documents failed parsing (prevents wiping local records if incoming format was corrupt)
+        val canReconcileDeletions = isServerConfirmed && !hasParsingErrors
 
-            dao.insertAnnouncements(
-                announcements
+        val firestoreIds = snapshot.documents.map { it.id }.toSet()
+        val announcementsToDelete = localBeforeSync.filter { it.id !in firestoreIds }
+
+        if (!isServerConfirmed) {
+            Log.w(
+                "FirestoreSyncManager",
+                "Skipping announcement deletion reconciliation: snapshot is cached or has pending writes (isFromCache=$isFromCache, hasPendingWrites=$hasPendingWrites). Local data preserved."
             )
+        } else if (hasParsingErrors) {
+            Log.w(
+                "FirestoreSyncManager",
+                "Skipping announcement deletion reconciliation: document parsing errors occurred. Local data preserved."
+            )
+        }
+
+        // Atomically reconcile deletions and insert updated records in a Room transaction
+        database.withTransaction {
+            if (canReconcileDeletions && announcementsToDelete.isNotEmpty()) {
+                announcementsToDelete.forEach { deletedAnnouncement ->
+                    dao.deleteAnnouncementById(deletedAnnouncement.id)
+                }
+            }
+
+            if (announcements.isNotEmpty()) {
+                dao.insertAnnouncements(announcements)
+            }
         }
     }
 }
