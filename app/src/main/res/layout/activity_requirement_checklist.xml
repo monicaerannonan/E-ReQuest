@@ -9,16 +9,52 @@
     android:background="@color/background"
     tools:context=".RequirementChecklistActivity">
 
-    <!-- HEADER -->
+    <!-- Base Solid Dark Navy Layer -->
+    <View
+        android:id="@+id/vChecklistHeaderBase"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/primary"
+        app:layout_constraintTop_toTopOf="@id/checklistHeader"
+        app:layout_constraintBottom_toBottomOf="@id/checklistHeader"
+        app:layout_constraintStart_toStartOf="@id/checklistHeader"
+        app:layout_constraintEnd_toEndOf="@id/checklistHeader" />
+
+    <!-- Campus Background Photograph adjusted for compact header at 75% opacity -->
+    <ImageView
+        android:id="@+id/ivChecklistHeaderCampusBg"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:src="@drawable/bg_header_campus_compact"
+        android:scaleType="centerCrop"
+        android:alpha="0.75"
+        android:contentDescription="@null"
+        app:layout_constraintTop_toTopOf="@id/checklistHeader"
+        app:layout_constraintBottom_toBottomOf="@id/checklistHeader"
+        app:layout_constraintStart_toStartOf="@id/checklistHeader"
+        app:layout_constraintEnd_toEndOf="@id/checklistHeader" />
+
+    <!-- Dark Blue Gradient Overlay placed directly over the image before text renders -->
+    <View
+        android:id="@+id/vChecklistHeaderOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_header_gradient_overlay"
+        app:layout_constraintTop_toTopOf="@id/checklistHeader"
+        app:layout_constraintBottom_toBottomOf="@id/checklistHeader"
+        app:layout_constraintStart_toStartOf="@id/checklistHeader"
+        app:layout_constraintEnd_toEndOf="@id/checklistHeader" />
+
+    <!-- HEADER (Natural wrap_content) -->
     <LinearLayout
         android:id="@+id/checklistHeader"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="@color/primary"
+        android:background="@android:color/transparent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
-        android:paddingTop="24dp"
+        android:paddingTop="48dp"
         android:paddingEnd="20dp"
         android:paddingBottom="20dp"
         app:layout_constraintTop_toTopOf="parent"

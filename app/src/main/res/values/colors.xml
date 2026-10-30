@@ -10,8 +10,8 @@
     <color name="accent">#E6A817</color>
     <color name="accent_light">#F4C95D</color>
 
-    <!-- Application Background -->
-    <color name="background">#F7F9FB</color>
+    <!-- Application Background (Elevated Ice-Slate Tint) -->
+    <color name="background">#EEF2F6</color>
     <color name="surface">#FFFFFF</color>
     <color name="card_background">#FFFFFF</color>
 
@@ -29,6 +29,23 @@
     <!-- UI Elements -->
     <color name="divider">#E4E7EC</color>
     <color name="border">#D0D5DD</color>
+
+    <!-- Top Header (ICCT Campus Overhaul) -->
+    <color name="header_bg_base">#102A3E</color>
+    <color name="header_overlay_dark">#D9102A3E</color>
+    <color name="header_overlay_navy">#E6173B57</color>
+
+    <!-- Bottom Navigation Bar (Navy Blue Theme) -->
+    <color name="nav_active_primary">#173B57</color>
+    <color name="nav_active_pill">#E8EEF5</color>
+    <color name="nav_inactive">#6C7B8A</color>
+    <color name="nav_bar_border">#E2E8F0</color>
+    <color name="nav_bar_surface">#FFFFFF</color>
+    <color name="nav_bar_dark_bg">#173B57</color>
+    <color name="nav_bar_dark_pill">#254B6E</color>
+    <color name="nav_bar_dark_inactive">#8DA1B5</color>
+    <color name="nav_pulse_stroke">#3884B3</color>
+    <color name="nav_pulse_fill">#203884B3</color>
 
     <!-- Default Colors -->
     <color name="black">#FF000000</color>

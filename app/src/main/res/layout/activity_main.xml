@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -7,23 +6,46 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/primary"
-    android:paddingStart="24dp"
-    android:paddingEnd="24dp"
+    android:background="@color/primary_dark"
     tools:context=".MainActivity">
+
+    <!-- Full-screen Architectural Backdrop (ICCT Cainta Main Campus Entrance) -->
+    <ImageView
+        android:id="@+id/ivSplashBg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0.32"
+        android:contentDescription="@null"
+        android:scaleType="centerCrop"
+        android:src="@drawable/bg_splash_campus"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Dark Navy Vignette Gradient Overlay (Lightened at bottom to showcase entrance) -->
+    <View
+        android:id="@+id/vSplashOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/bg_splash_gradient"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- Logo -->
     <ImageView
         android:id="@+id/ivLogo"
         android:layout_width="120dp"
         android:layout_height="120dp"
-        android:background="@drawable/bg_logo_circle"
-        android:padding="0dp"
-        android:src="@drawable/ic_erequest_logo"
-        android:contentDescription="@string/app_name"
         android:adjustViewBounds="true"
-        android:scaleType="centerCrop"
+        android:background="@drawable/bg_logo_circle"
         android:clipToOutline="true"
+        android:contentDescription="@string/app_name"
+        android:padding="0dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_erequest_logo"
         app:layout_constraintBottom_toTopOf="@id/tvAppName"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -35,10 +57,11 @@
         android:id="@+id/tvAppName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="18dp"
+        android:letterSpacing="0.02"
         android:text="@string/app_name"
         android:textColor="@color/text_white"
-        android:textSize="34sp"
+        android:textSize="36sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@id/tvTagline"
         app:layout_constraintEnd_toEndOf="parent"
@@ -50,24 +73,27 @@
         android:id="@+id/tvTagline"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:gravity="center"
+        android:letterSpacing="0.03"
         android:text="@string/app_tagline"
-        android:textColor="@color/text_white"
-        android:textSize="15sp"
+        android:textColor="#DDE7F0"
+        android:textSize="14sp"
         app:layout_constraintBottom_toTopOf="@id/progressLoading"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvAppName" />
 
-    <!-- Loading Indicator -->
+    <!-- Loading Indicator (Horizontal Sleek Pill) -->
     <ProgressBar
         android:id="@+id/progressLoading"
-        style="?android:attr/progressBarStyle"
-        android:layout_width="38dp"
-        android:layout_height="38dp"
-        android:layout_marginTop="36dp"
-        android:indeterminateTint="@color/accent"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="150dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="28dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@drawable/bg_splash_progress_bar"
         app:layout_constraintBottom_toTopOf="@id/tvLoading"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -78,22 +104,28 @@
         android:id="@+id/tvLoading"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="10dp"
+        android:letterSpacing="0.04"
         android:text="Preparing your guide..."
-        android:textColor="@color/text_white"
+        android:textColor="#CBD7E2"
         android:textSize="12sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/progressLoading" />
 
-    <!-- Bottom Information -->
+    <!-- Bottom Information in Sleek Translucent Pill (NO institutional footer) -->
     <TextView
         android:id="@+id/tvOfflineReady"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="32dp"
-        android:alpha="0.75"
+        android:layout_marginBottom="28dp"
+        android:background="@drawable/bg_splash_offline_pill"
+        android:paddingStart="16dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="6dp"
+        android:letterSpacing="0.04"
         android:text="Designed for online and offline access"
         android:textColor="@color/text_white"
         android:textSize="11sp"

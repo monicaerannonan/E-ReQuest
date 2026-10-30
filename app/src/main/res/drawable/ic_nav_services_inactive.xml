@@ -1,0 +1,26 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:strokeColor="@color/nav_inactive"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M5.5,4 H9.5 C10.05,4 10.5,4.45 10.5,5 V9 C10.5,9.55 10.05,10 9.5,10 H5.5 C4.95,10 4.5,9.55 4.5,9 V5 C4.5,4.45 4.95,4 5.5,4 Z" />
+    <path
+        android:strokeColor="@color/nav_inactive"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M14.5,4 H18.5 C19.05,4 19.5,4.45 19.5,5 V9 C19.5,9.55 19.05,10 18.5,10 H14.5 C13.95,10 13.5,9.55 13.5,9 V5 C13.5,4.45 13.95,4 14.5,4 Z" />
+    <path
+        android:strokeColor="@color/nav_inactive"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M5.5,14 H9.5 C10.05,14 10.5,14.45 10.5,15 V19 C10.5,19.55 10.05,20 9.5,20 H5.5 C4.95,20 4.5,19.55 4.5,19 V15 C4.5,14.45 4.95,14 5.5,14 Z" />
+    <path
+        android:strokeColor="@color/nav_inactive"
+        android:strokeWidth="2"
+        android:strokeLineJoin="round"
+        android:pathData="M14.5,14 H18.5 C19.05,14 19.5,14.45 19.5,15 V19 C19.5,19.55 19.05,20 18.5,20 H14.5 C13.95,20 13.5,19.55 13.5,19 V15 C13.5,14.45 13.95,14 14.5,14 Z" />
+</vector>

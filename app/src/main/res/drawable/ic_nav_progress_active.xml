@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Solid Navy Circle -->
+    <path
+        android:fillColor="@color/nav_active_primary"
+        android:pathData="M12,2 C6.48,2 2,6.48 2,12 C2,17.52 6.48,22 12,22 C17.52,22 22,17.52 22,12 C22,6.48 17.52,2 12,2 Z" />
+    <!-- White Checkmark cutout inside -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M10.2,16.2 L6.5,12.5 L7.91,11.09 L10.2,13.37 L16.29,7.28 L17.7,8.7 L10.2,16.2 Z" />
+</vector>

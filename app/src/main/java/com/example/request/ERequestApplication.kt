@@ -1,4 +1,16 @@
-package com.example.request
+﻿package com.example.request
+
+import com.example.request.R
+import com.example.request.data.local.*
+import com.example.request.data.sync.*
+import com.example.request.features.checklist.*
+import com.example.request.features.home.*
+import com.example.request.features.notifications.*
+import com.example.request.features.progress.*
+import com.example.request.features.services.*
+import com.example.request.features.splash.*
+import com.example.request.features.transactions.*
+import com.example.request.ui.custom.*
 
 import android.app.Application
 import android.app.NotificationChannel
@@ -79,7 +91,7 @@ class ERequestApplication :
 
 
         // =================================================
-        // INITIAL FIRESTORE → ROOM SYNC
+        // INITIAL FIRESTORE â†’ ROOM SYNC
         // =================================================
 
         applicationScope.launch {

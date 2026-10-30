@@ -9,16 +9,56 @@
     android:background="@color/background"
     tools:context=".TransactionDetailsActivity">
 
-    <!-- HEADER -->
+    <!-- ================================================= -->
+    <!-- HEADER BACKGROUND LAYERS (Strictly inside header container bounds) -->
+    <!-- ================================================= -->
+
+    <!-- Base Solid Dark Navy Layer -->
+    <View
+        android:id="@+id/vDetailsHeaderBase"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/primary"
+        app:layout_constraintTop_toTopOf="@id/detailsHeader"
+        app:layout_constraintBottom_toBottomOf="@id/detailsHeader"
+        app:layout_constraintStart_toStartOf="@id/detailsHeader"
+        app:layout_constraintEnd_toEndOf="@id/detailsHeader" />
+
+    <!-- Campus Background Photograph adjusted for compact header at 75% opacity -->
+    <ImageView
+        android:id="@+id/ivDetailsHeaderCampusBg"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:src="@drawable/bg_header_campus_compact"
+        android:scaleType="centerCrop"
+        android:alpha="0.75"
+        android:contentDescription="@null"
+        app:layout_constraintTop_toTopOf="@id/detailsHeader"
+        app:layout_constraintBottom_toBottomOf="@id/detailsHeader"
+        app:layout_constraintStart_toStartOf="@id/detailsHeader"
+        app:layout_constraintEnd_toEndOf="@id/detailsHeader" />
+
+    <!-- Dark Blue Gradient Overlay placed directly over the image before text renders -->
+    <View
+        android:id="@+id/vDetailsHeaderOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_header_gradient_overlay"
+        app:layout_constraintTop_toTopOf="@id/detailsHeader"
+        app:layout_constraintBottom_toBottomOf="@id/detailsHeader"
+        app:layout_constraintStart_toStartOf="@id/detailsHeader"
+        app:layout_constraintEnd_toEndOf="@id/detailsHeader" />
+
+    <!-- Details Header Content LinearLayout (Clean, safe-area padded, natural wrap_content) -->
     <LinearLayout
         android:id="@+id/detailsHeader"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="@color/primary"
+        android:background="@android:color/transparent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
-        android:paddingTop="24dp"
+        android:paddingTop="48dp"
         android:paddingEnd="20dp"
         android:paddingBottom="20dp"
         app:layout_constraintTop_toTopOf="parent"
@@ -49,14 +89,14 @@
                 android:layout_height="wrap_content"
                 android:text="Getting Prospectus"
                 android:textColor="@color/text_white"
-                android:textSize="23sp"
+                android:textSize="24sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/tvServiceName"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
+                android:layout_marginTop="2dp"
                 android:alpha="0.85"
                 android:text="Registrar Services"
                 android:textColor="@color/text_white"

@@ -54,7 +54,7 @@
 
         <service
 
-            android:name=".ERequestFirebaseMessagingService"
+            android:name=".features.notifications.ERequestFirebaseMessagingService"
 
             android:exported="false">
 
@@ -74,7 +74,7 @@
 
         <activity
 
-            android:name=".HomeActivity"
+            android:name=".features.home.HomeActivity"
 
             android:exported="false" />
 
@@ -85,7 +85,7 @@
 
         <activity
 
-            android:name=".ServicesActivity"
+            android:name=".features.services.ServicesActivity"
 
             android:exported="false"
 
@@ -98,7 +98,7 @@
 
         <activity
 
-            android:name=".ProgressActivity"
+            android:name=".features.progress.ProgressActivity"
 
             android:exported="false" />
 
@@ -109,7 +109,7 @@
 
         <activity
 
-            android:name=".TransactionListActivity"
+            android:name=".features.transactions.TransactionListActivity"
 
             android:exported="false"
 
@@ -122,7 +122,7 @@
 
         <activity
 
-            android:name=".TransactionDetailsActivity"
+            android:name=".features.transactions.TransactionDetailsActivity"
 
             android:exported="false"
 
@@ -135,7 +135,7 @@
 
         <activity
 
-            android:name=".RequirementChecklistActivity"
+            android:name=".features.checklist.RequirementChecklistActivity"
 
             android:exported="false"
 
@@ -148,7 +148,7 @@
 
         <activity
 
-            android:name=".MainActivity"
+            android:name=".features.splash.MainActivity"
 
             android:exported="true">
 

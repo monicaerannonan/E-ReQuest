@@ -8,36 +8,82 @@
     android:background="@color/background"
     tools:context=".ProgressActivity">
 
+    <!-- Header Base Background Color -->
+    <View
+        android:id="@+id/vProgressHeaderBase"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/primary"
+        app:layout_constraintTop_toTopOf="@id/header"
+        app:layout_constraintBottom_toBottomOf="@id/header"
+        app:layout_constraintStart_toStartOf="@id/header"
+        app:layout_constraintEnd_toEndOf="@id/header" />
+
+    <!-- Campus Background Photograph adjusted for compact header at 75% opacity -->
+    <ImageView
+        android:id="@+id/ivProgressHeaderCampusBg"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:src="@drawable/bg_header_campus_compact"
+        android:scaleType="centerCrop"
+        android:alpha="0.75"
+        android:contentDescription="@null"
+        app:layout_constraintTop_toTopOf="@id/header"
+        app:layout_constraintBottom_toBottomOf="@id/header"
+        app:layout_constraintStart_toStartOf="@id/header"
+        app:layout_constraintEnd_toEndOf="@id/header" />
+
+    <!-- Dark Blue Gradient Overlay placed directly over the image before text renders -->
+    <View
+        android:id="@+id/vProgressHeaderOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_header_gradient_overlay"
+        app:layout_constraintTop_toTopOf="@id/header"
+        app:layout_constraintBottom_toBottomOf="@id/header"
+        app:layout_constraintStart_toStartOf="@id/header"
+        app:layout_constraintEnd_toEndOf="@id/header" />
+
+    <!-- Progress Header Content LinearLayout (Clean, safe-area padded, natural wrap_content) -->
     <LinearLayout
         android:id="@+id/header"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="@color/primary"
-        android:orientation="vertical"
+        android:background="@android:color/transparent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingStart="24dp"
-        android:paddingTop="28dp"
+        android:paddingTop="48dp"
         android:paddingEnd="24dp"
         android:paddingBottom="20dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Progress"
-            android:textColor="@color/text_white"
-            android:textSize="26sp"
-            android:textStyle="bold" />
+            android:layout_weight="1"
+            android:orientation="vertical">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:alpha="0.85"
-            android:text="Track your active transactions"
-            android:textColor="@color/text_white"
-            android:textSize="13sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Progress"
+                android:textColor="@color/text_white"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:alpha="0.85"
+                android:text="Track your active Transactions"
+                android:textColor="@color/text_white"
+                android:textSize="13sp" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
@@ -111,14 +157,18 @@
         android:id="@+id/bottomNavigation"
         android:layout_width="0dp"
         android:layout_height="72dp"
-        android:background="@color/surface"
-        android:gravity="center"
+        android:background="@drawable/bg_bottom_nav_bar"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
         android:orientation="horizontal"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <TextView
+        <!-- Inactive Tab: Home -->
+        <LinearLayout
             android:id="@+id/navHome"
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -126,11 +176,38 @@
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:text="⌂&#10;Home"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
+            android:orientation="vertical"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:background="?attr/selectableItemBackgroundBorderless">
 
-        <TextView
+            <FrameLayout
+                android:layout_width="64dp"
+                android:layout_height="32dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:background="@android:color/transparent">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Home"
+                    android:src="@drawable/ic_nav_home_inactive" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Home"
+                android:textColor="@color/nav_inactive"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <!-- Inactive Tab: Services -->
+        <LinearLayout
             android:id="@+id/navServices"
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -138,11 +215,38 @@
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:text="☰&#10;Services"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
+            android:orientation="vertical"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:background="?attr/selectableItemBackgroundBorderless">
 
-        <TextView
+            <FrameLayout
+                android:layout_width="64dp"
+                android:layout_height="32dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:background="@android:color/transparent">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Services"
+                    android:src="@drawable/ic_nav_services_inactive" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Services"
+                android:textColor="@color/nav_inactive"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <!-- Active Tab: Progress -->
+        <LinearLayout
             android:id="@+id/navProgress"
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -150,10 +254,36 @@
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:text="✓&#10;Progress"
-            android:textColor="@color/primary"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+            android:orientation="vertical"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <FrameLayout
+                android:layout_width="64dp"
+                android:layout_height="32dp"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:background="@drawable/bg_nav_pill_active">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Progress"
+                    android:src="@drawable/ic_nav_progress_active" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="Progress"
+                android:textColor="@color/nav_active_primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

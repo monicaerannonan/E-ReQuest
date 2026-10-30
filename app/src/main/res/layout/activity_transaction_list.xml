@@ -9,16 +9,53 @@
     android:background="@color/background"
     tools:context=".TransactionListActivity">
 
+    <!-- Header Base Background Color -->
+    <View
+        android:id="@+id/vTransactionHeaderBase"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/primary"
+        app:layout_constraintTop_toTopOf="@id/transactionHeader"
+        app:layout_constraintBottom_toBottomOf="@id/transactionHeader"
+        app:layout_constraintStart_toStartOf="@id/transactionHeader"
+        app:layout_constraintEnd_toEndOf="@id/transactionHeader" />
+
+    <!-- Campus Background Photograph adjusted for compact header at 75% opacity -->
+    <ImageView
+        android:id="@+id/ivTransactionHeaderCampusBg"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:src="@drawable/bg_header_campus_compact"
+        android:scaleType="centerCrop"
+        android:alpha="0.75"
+        android:contentDescription="@null"
+        app:layout_constraintTop_toTopOf="@id/transactionHeader"
+        app:layout_constraintBottom_toBottomOf="@id/transactionHeader"
+        app:layout_constraintStart_toStartOf="@id/transactionHeader"
+        app:layout_constraintEnd_toEndOf="@id/transactionHeader" />
+
+    <!-- Dark Blue Gradient Overlay placed directly over the image before text renders -->
+    <View
+        android:id="@+id/vTransactionHeaderOverlay"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_header_gradient_overlay"
+        app:layout_constraintTop_toTopOf="@id/transactionHeader"
+        app:layout_constraintBottom_toBottomOf="@id/transactionHeader"
+        app:layout_constraintStart_toStartOf="@id/transactionHeader"
+        app:layout_constraintEnd_toEndOf="@id/transactionHeader" />
+
+    <!-- Transaction Header Content LinearLayout (Clean, prominent title, safe-area padded, natural wrap_content) -->
     <LinearLayout
         android:id="@+id/transactionHeader"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="@color/primary"
+        android:background="@android:color/transparent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="16dp"
-        android:paddingTop="24dp"
-        android:paddingEnd="16dp"
+        android:paddingTop="48dp"
+        android:paddingEnd="20dp"
         android:paddingBottom="20dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -38,7 +75,7 @@
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
+            android:layout_marginStart="8dp"
             android:layout_weight="1"
             android:orientation="vertical">
 
