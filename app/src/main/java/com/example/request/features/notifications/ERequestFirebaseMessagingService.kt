@@ -102,6 +102,18 @@ class ERequestFirebaseMessagingService :
             remoteMessage.messageId ?: "fcm_${System.currentTimeMillis()}"
         }
 
+        val eventTimestamp = run {
+            val raw = data["updatedAt"] ?: data["timestamp"] ?: data["createdAt"]
+            val millis = raw?.toLongOrNull()
+            if (millis != null && millis > 0L) {
+                if (millis in 1_000_000_000L..99_999_999_999L) millis * 1000L else millis
+            } else if (remoteMessage.sentTime > 0L) {
+                remoteMessage.sentTime
+            } else {
+                System.currentTimeMillis()
+            }
+        }
+
         // 1. Immediately display local NotificationCompat alert (works when foregrounded or backgrounded with data payload)
         val wasDispatched = notificationHelper.showTransactionUpdateNotification(
             notificationKey = notificationKey,
@@ -109,7 +121,8 @@ class ERequestFirebaseMessagingService :
             transactionName = transactionName,
             serviceName = serviceName,
             updatedSection = targetSection,
-            notificationMessage = message
+            notificationMessage = message,
+            timestampMillis = eventTimestamp
         )
 
         // 2. Persist notification in Room with isNotified = wasDispatched and trigger background sync
@@ -118,17 +131,16 @@ class ERequestFirebaseMessagingService :
             val dao = database.eRequestDao()
 
             try {
-                val now = System.currentTimeMillis()
                 val formattedDate = SimpleDateFormat(
                     "MMM dd, yyyy \u2022 hh:mm a",
                     Locale.getDefault()
-                ).format(Date(now))
+                ).format(Date(eventTimestamp))
 
                 val entityId = if (transactionId.isNotBlank()) {
                     dao.getUnreadNotificationByTransaction(transactionId)?.id
                         ?: "tx_update_$transactionId"
                 } else {
-                    "fcm_notice_${remoteMessage.messageId ?: now}"
+                    "fcm_notice_${remoteMessage.messageId ?: eventTimestamp}"
                 }
 
                 val entity = UpdateNotificationEntity(
@@ -141,7 +153,7 @@ class ERequestFirebaseMessagingService :
                     dateTime = formattedDate,
                     isRead = false,
                     isNotified = wasDispatched,
-                    createdAt = now
+                    createdAt = eventTimestamp
                 )
 
                 dao.insertUpdateNotification(entity)

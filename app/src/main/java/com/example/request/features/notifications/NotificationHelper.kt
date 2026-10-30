@@ -81,7 +81,8 @@ class NotificationHelper(
                 transactionName = entity.transactionName,
                 serviceName = entity.serviceName,
                 updatedSection = entity.updatedSection,
-                notificationMessage = entity.message
+                notificationMessage = entity.message,
+                timestampMillis = entity.createdAt
             )
             if (dispatched) {
                 dao.markUpdateNotificationAsNotified(entity.id)
@@ -95,7 +96,8 @@ class NotificationHelper(
         transactionName: String,
         serviceName: String,
         updatedSection: String,
-        notificationMessage: String
+        notificationMessage: String,
+        timestampMillis: Long = System.currentTimeMillis()
     ): Boolean {
         ensureNotificationChannel()
 
@@ -135,6 +137,8 @@ class NotificationHelper(
             .setStyle(NotificationCompat.BigTextStyle().bigText(notificationMessage))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setWhen(timestampMillis)
+            .setShowWhen(true)
             .setAutoCancel(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)

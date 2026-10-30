@@ -116,11 +116,28 @@ class FirestoreSyncManager(
         document: DocumentSnapshot,
         field: String
     ): Long? {
-        return when (val value = document.get(field)) {
-            is Number -> value.toLong()
+        val value = document.get(field)
+            ?: if (field == "updatedAt") document.get("updated_at") ?: document.get("timestamp") else null
+        return when (value) {
+            is Number -> {
+                val num = value.toLong()
+                if (num in 1_000_000_000L..99_999_999_999L) num * 1000L else num
+            }
             is com.google.firebase.Timestamp ->
                 value.toDate().time
             is java.util.Date -> value.time
+            is String -> {
+                val asLong = value.toLongOrNull()
+                if (asLong != null) {
+                    if (asLong in 1_000_000_000L..99_999_999_999L) asLong * 1000L else asLong
+                } else {
+                    try {
+                        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(value)?.time
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+            }
             else -> {
                 if (document.contains(field) && value != null) {
                     Log.w(
@@ -160,6 +177,8 @@ class FirestoreSyncManager(
 
                 val syncErrors = mutableListOf<Throwable>()
 
+                val transactionUpdateTimestamps = mutableMapOf<String, Long>()
+
                 runCatching {
                     syncServices()
                 }.onFailure { e ->
@@ -168,28 +187,28 @@ class FirestoreSyncManager(
                 }
 
                 runCatching {
-                    changedTransactionInfoIds.addAll(syncTransactions())
+                    changedTransactionInfoIds.addAll(syncTransactions(transactionUpdateTimestamps))
                 }.onFailure { e ->
                     Log.e("FirestoreSyncManager", "syncTransactions failed: ${e.message}", e)
                     syncErrors.add(e)
                 }
 
                 runCatching {
-                    changedRequirementTxIds.addAll(syncRequirements())
+                    changedRequirementTxIds.addAll(syncRequirements(transactionUpdateTimestamps))
                 }.onFailure { e ->
                     Log.e("FirestoreSyncManager", "syncRequirements failed: ${e.message}", e)
                     syncErrors.add(e)
                 }
 
                 runCatching {
-                    changedProcedureTxIds.addAll(syncProcedureSteps())
+                    changedProcedureTxIds.addAll(syncProcedureSteps(transactionUpdateTimestamps))
                 }.onFailure { e ->
                     Log.e("FirestoreSyncManager", "syncProcedureSteps failed: ${e.message}", e)
                     syncErrors.add(e)
                 }
 
                 runCatching {
-                    changedGuidelineTxIds.addAll(syncDepartmentGuidelines())
+                    changedGuidelineTxIds.addAll(syncDepartmentGuidelines(transactionUpdateTimestamps))
                 }.onFailure { e ->
                     Log.e("FirestoreSyncManager", "syncDepartmentGuidelines failed: ${e.message}", e)
                     syncErrors.add(e)
@@ -230,7 +249,8 @@ class FirestoreSyncManager(
                     createTransactionUpdateNotification(
                         transactionId = transactionId,
                         updatedSection = targetSection,
-                        message = updateMessage
+                        message = updateMessage,
+                        adminUpdatedAt = transactionUpdateTimestamps[transactionId]
                     )
                 }
 
@@ -426,7 +446,9 @@ class FirestoreSyncManager(
     // TRANSACTIONS
     // =====================================================
 
-    private suspend fun syncTransactions(): Set<String> {
+    private suspend fun syncTransactions(
+        timestamps: MutableMap<String, Long> = mutableMapOf()
+    ): Set<String> {
 
         val snapshot =
             firestore
@@ -535,6 +557,10 @@ class FirestoreSyncManager(
                             changedTransactionIds.add(
                                 newTransaction.id
                             )
+                            if (newTransaction.updatedAt > 0L) {
+                                val prev = timestamps[newTransaction.id] ?: 0L
+                                timestamps[newTransaction.id] = maxOf(prev, newTransaction.updatedAt)
+                            }
                         }
                     }
 
@@ -582,7 +608,9 @@ class FirestoreSyncManager(
     // REQUIREMENTS
     // =====================================================
 
-    private suspend fun syncRequirements(): Set<String> {
+    private suspend fun syncRequirements(
+        timestamps: MutableMap<String, Long> = mutableMapOf()
+    ): Set<String> {
 
         val snapshot =
             firestore
@@ -663,6 +691,10 @@ class FirestoreSyncManager(
                                 changedTransactionIds.add(
                                     oldRequirement.transactionId
                                 )
+                                if (oldRequirement.updatedAt > 0L) {
+                                    val prev = timestamps[oldRequirement.transactionId] ?: 0L
+                                    timestamps[oldRequirement.transactionId] = maxOf(prev, oldRequirement.updatedAt)
+                                }
                             }
 
                             if (
@@ -671,6 +703,10 @@ class FirestoreSyncManager(
                                 changedTransactionIds.add(
                                     newRequirement.transactionId
                                 )
+                                if (newRequirement.updatedAt > 0L) {
+                                    val prev = timestamps[newRequirement.transactionId] ?: 0L
+                                    timestamps[newRequirement.transactionId] = maxOf(prev, newRequirement.updatedAt)
+                                }
                             }
                         }
                     }
@@ -744,7 +780,8 @@ class FirestoreSyncManager(
     private suspend fun createTransactionUpdateNotification(
         transactionId: String,
         updatedSection: String,
-        message: String
+        message: String,
+        adminUpdatedAt: Long? = null
     ) {
 
         try {
@@ -763,15 +800,34 @@ class FirestoreSyncManager(
                 service?.name
                     ?: transaction.officeName
 
-            val currentTime =
-                System.currentTimeMillis()
+            // Gather candidate timestamps from the admin update
+            val candidateTimestamps = mutableListOf<Long>()
+            if (adminUpdatedAt != null && adminUpdatedAt > 0L) {
+                candidateTimestamps.add(adminUpdatedAt)
+            }
+            if (transaction.updatedAt > 0L) {
+                candidateTimestamps.add(transaction.updatedAt)
+            }
+            dao.getRequirements(transaction.id).forEach {
+                if (it.updatedAt > 0L) candidateTimestamps.add(it.updatedAt)
+            }
+            dao.getProcedureSteps(transaction.id).forEach {
+                if (it.updatedAt > 0L) candidateTimestamps.add(it.updatedAt)
+            }
+            dao.getDepartmentGuidelines(transaction.id).forEach {
+                if (it.updatedAt > 0L) candidateTimestamps.add(it.updatedAt)
+            }
+            service?.updatedAt?.takeIf { it > 0L }?.let { candidateTimestamps.add(it) }
+
+            // Use the actual admin save timestamp, falling back to currentTime only if none recorded
+            val effectiveTimestamp = candidateTimestamps.maxOrNull() ?: System.currentTimeMillis()
 
             val formattedDate =
                 SimpleDateFormat(
                     "MMM dd, yyyy \u2022 hh:mm a",
                     Locale.getDefault()
                 ).format(
-                    Date(currentTime)
+                    Date(effectiveTimestamp)
                 )
 
             // Check if an unread notification already exists for this transaction
@@ -782,14 +838,10 @@ class FirestoreSyncManager(
             val notificationId =
                 existingUnread?.id ?: "tx_update_${transaction.id}"
 
-            // Preserve isNotified = true only if an incoming FCM push just created this
-            // unread notification within the last 15 seconds for the same update event.
-            // Any newly detected Firestore diff keeps isRead = false (for the in-app banner)
-            // and sets isNotified = false so the system tray fires once for this new update.
-            val wasJustNotifiedByFcm =
-                existingUnread != null &&
-                    existingUnread.isNotified &&
-                    (currentTime - existingUnread.createdAt) in 0..15_000L
+            // Determine if this exact update was already alerted to the user (e.g. by FCM while online or recently)
+            val isAlreadyNotified = existingUnread != null &&
+                existingUnread.isNotified &&
+                existingUnread.createdAt >= effectiveTimestamp
 
             val notification =
                 UpdateNotificationEntity(
@@ -801,8 +853,8 @@ class FirestoreSyncManager(
                     message = message,
                     dateTime = formattedDate,
                     isRead = false,
-                    isNotified = wasJustNotifiedByFcm,
-                    createdAt = currentTime
+                    isNotified = isAlreadyNotified,
+                    createdAt = effectiveTimestamp
                 )
 
             dao.insertUpdateNotification(
@@ -820,7 +872,9 @@ class FirestoreSyncManager(
     // PROCEDURE STEPS
     // =====================================================
 
-    private suspend fun syncProcedureSteps(): Set<String> {
+    private suspend fun syncProcedureSteps(
+        timestamps: MutableMap<String, Long> = mutableMapOf()
+    ): Set<String> {
 
         val snapshot =
             firestore
@@ -1091,12 +1145,20 @@ class FirestoreSyncManager(
                                 changedTransactionIds.add(
                                     oldStep.transactionId
                                 )
+                                if (oldStep.updatedAt > 0L) {
+                                    val prev = timestamps[oldStep.transactionId] ?: 0L
+                                    timestamps[oldStep.transactionId] = maxOf(prev, oldStep.updatedAt)
+                                }
                             }
 
                             if (transactionId.isNotBlank()) {
                                 changedTransactionIds.add(
                                     transactionId
                                 )
+                                if (updatedAt > 0L) {
+                                    val prev = timestamps[transactionId] ?: 0L
+                                    timestamps[transactionId] = maxOf(prev, updatedAt)
+                                }
                             }
                         }
                     }
@@ -1378,7 +1440,9 @@ class FirestoreSyncManager(
     // DEPARTMENT GUIDELINES
     // =====================================================
 
-    private suspend fun syncDepartmentGuidelines(): Set<String> {
+    private suspend fun syncDepartmentGuidelines(
+        timestamps: MutableMap<String, Long> = mutableMapOf()
+    ): Set<String> {
 
         val snapshot =
             firestore
@@ -1471,6 +1535,10 @@ class FirestoreSyncManager(
                                 changedTransactionIds.add(
                                     oldGuideline.transactionId
                                 )
+                                if (oldGuideline.updatedAt > 0L) {
+                                    val prev = timestamps[oldGuideline.transactionId] ?: 0L
+                                    timestamps[oldGuideline.transactionId] = maxOf(prev, oldGuideline.updatedAt)
+                                }
                             }
 
                             if (
@@ -1480,6 +1548,10 @@ class FirestoreSyncManager(
                                 changedTransactionIds.add(
                                     newGuideline.transactionId
                                 )
+                                if (newGuideline.updatedAt > 0L) {
+                                    val prev = timestamps[newGuideline.transactionId] ?: 0L
+                                    timestamps[newGuideline.transactionId] = maxOf(prev, newGuideline.updatedAt)
+                                }
                             }
                         }
                     }
