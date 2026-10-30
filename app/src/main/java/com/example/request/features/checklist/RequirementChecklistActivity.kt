@@ -1,4 +1,4 @@
-﻿package com.example.request.features.checklist
+package com.example.request.features.checklist
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -44,6 +44,48 @@ class RequirementChecklistActivity : AppCompatActivity() {
     private var requirements: List<RequirementEntity> = emptyList()
 
     private val checkBoxes = mutableListOf<CheckBox>()
+
+    private var transactionObservationJob: kotlinx.coroutines.Job? = null
+    private var hasLoadedTransaction = false
+
+    private val syncCompletionListener: () -> Unit = {
+        if (!isFinishing && !isDestroyed) {
+            loadRequirements()
+        }
+    }
+
+    private fun observeTransactionFlow() {
+        transactionObservationJob?.cancel()
+        transactionObservationJob = lifecycleScope.launch {
+            dao.getTransactionFlow(transactionId).collect { transaction ->
+                if (transaction == null) {
+                    if (hasLoadedTransaction) {
+                        android.widget.Toast.makeText(
+                            this@RequirementChecklistActivity,
+                            "This transaction is no longer available.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        finish()
+                    }
+                } else {
+                    hasLoadedTransaction = true
+                    tvChecklistTitle.text = transaction.name
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        FirestoreSyncManager.registerSyncCompletionListener(syncCompletionListener)
+        observeTransactionFlow()
+    }
+
+    override fun onStop() {
+        FirestoreSyncManager.unregisterSyncCompletionListener(syncCompletionListener)
+        transactionObservationJob?.cancel()
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

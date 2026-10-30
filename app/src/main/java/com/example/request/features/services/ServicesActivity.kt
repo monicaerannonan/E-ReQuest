@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -41,6 +42,11 @@ class ServicesActivity : AppCompatActivity() {
 
     private var isRefreshing = false
     private var activeToast: Toast? = null
+    private var observeServicesJob: Job? = null
+
+    private val syncCompletionListener = {
+        // Handled automatically via Room Flow
+    }
 
     private fun showSingleToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
         activeToast?.cancel()
@@ -68,30 +74,22 @@ class ServicesActivity : AppCompatActivity() {
             refreshData()
         }
 
-        NavAnimationHelper.applyNavBouncePress(navHome) {
-            NavAnimationHelper.seamlessNavigate(
-                this,
-                Intent(this, HomeActivity::class.java)
-            )
-        }
-
-        NavAnimationHelper.applyNavBouncePress(navServices) {
-            // Already on Services page - bounce animation still plays delightfully
-        }
-
-        NavAnimationHelper.applyNavBouncePress(navProgress) {
-            NavAnimationHelper.seamlessNavigate(
-                this,
-                Intent(this, ProgressActivity::class.java)
-            )
-        }
-
-        loadServices()
+        NavAnimationHelper.setupSlidingBottomNav(
+            activity = this,
+            activeTabIndex = 1
+        )
     }
 
-    override fun onResume() {
-        super.onResume()
-        loadServices()
+    override fun onStart() {
+        super.onStart()
+        FirestoreSyncManager.registerSyncCompletionListener(syncCompletionListener)
+        observeServices()
+    }
+
+    override fun onStop() {
+        FirestoreSyncManager.unregisterSyncCompletionListener(syncCompletionListener)
+        observeServicesJob?.cancel()
+        super.onStop()
     }
 
     private fun setupRecyclerView() {
@@ -110,12 +108,12 @@ class ServicesActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadServices() {
-        lifecycleScope.launch {
-            val services = withContext(Dispatchers.IO) {
-                dao.getAllServices()
+    private fun observeServices() {
+        observeServicesJob?.cancel()
+        observeServicesJob = lifecycleScope.launch {
+            dao.getAllServicesFlow().collect { services ->
+                displayServices(services)
             }
-            displayServices(services)
         }
     }
 

@@ -66,6 +66,59 @@ class TransactionDetailsActivity : AppCompatActivity() {
     private lateinit var firestoreSyncManager: FirestoreSyncManager
 
     private var transactionId: String = ""
+    private var transactionObservationJob: kotlinx.coroutines.Job? = null
+    private var hasLoadedTransaction = false
+
+    private val syncCompletionListener: () -> Unit = {
+        if (!isFinishing && !isDestroyed) {
+            lifecycleScope.launch {
+                loadTransactionDetails(
+                    transactionId = transactionId,
+                    fallbackTransactionName = tvTransactionTitle.text.toString(),
+                    fallbackServiceName = tvServiceName.text.toString(),
+                    targetSection = null
+                )
+            }
+        }
+    }
+
+    private fun observeTransactionFlow() {
+        transactionObservationJob?.cancel()
+        transactionObservationJob = lifecycleScope.launch {
+            dao.getTransactionFlow(transactionId).collect { transaction ->
+                if (transaction == null) {
+                    if (hasLoadedTransaction) {
+                        showSingleToast("This transaction is no longer available.")
+                        finish()
+                    }
+                } else {
+                    hasLoadedTransaction = true
+                    tvTransactionTitle.text = transaction.name
+                    if (transaction.description.isNotBlank()) {
+                        tvDescription.text = transaction.description
+                    }
+                    if (transaction.officeName.isNotBlank()) {
+                        tvOffice.text = transaction.officeName
+                    }
+                    if (transaction.officeSchedule.isNotBlank()) {
+                        tvSchedule.text = transaction.officeSchedule
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        FirestoreSyncManager.registerSyncCompletionListener(syncCompletionListener)
+        observeTransactionFlow()
+    }
+
+    override fun onStop() {
+        FirestoreSyncManager.unregisterSyncCompletionListener(syncCompletionListener)
+        transactionObservationJob?.cancel()
+        super.onStop()
+    }
 
     // =========================================================
     // ON CREATE
@@ -370,6 +423,8 @@ class TransactionDetailsActivity : AppCompatActivity() {
 
             return
         }
+
+        hasLoadedTransaction = true
 
         // =================================================
         // RELATED ROOM DATA

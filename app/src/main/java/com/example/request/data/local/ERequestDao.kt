@@ -1,4 +1,4 @@
-﻿package com.example.request.data.local
+package com.example.request.data.local
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -16,6 +16,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ERequestDao {
@@ -28,6 +29,13 @@ interface ERequestDao {
     suspend fun insertServices(
         services: List<ServiceEntity>
     )
+
+    @Query("""
+        SELECT * FROM services
+        WHERE isActive = 1
+        ORDER BY name ASC
+    """)
+    fun getAllServicesFlow(): Flow<List<ServiceEntity>>
 
     @Query("""
         SELECT * FROM services
@@ -77,9 +85,26 @@ interface ERequestDao {
         AND isActive = 1
         ORDER BY name ASC
     """)
+    fun getTransactionsByServiceFlow(
+        serviceId: String
+    ): Flow<List<TransactionEntity>>
+
+    @Query("""
+        SELECT * FROM transactions
+        WHERE serviceId = :serviceId
+        AND isActive = 1
+        ORDER BY name ASC
+    """)
     suspend fun getTransactionsByService(
         serviceId: String
     ): List<TransactionEntity>
+
+    @Query("""
+        SELECT * FROM transactions
+        WHERE isActive = 1
+        ORDER BY name ASC
+    """)
+    fun getAllTransactionsFlow(): Flow<List<TransactionEntity>>
 
     @Query("""
         SELECT * FROM transactions
@@ -98,9 +123,34 @@ interface ERequestDao {
         WHERE id = :transactionId
         LIMIT 1
     """)
+    fun getTransactionFlow(
+        transactionId: String
+    ): Flow<TransactionEntity?>
+
+    @Query("""
+        SELECT * FROM transactions
+        WHERE id = :transactionId
+        LIMIT 1
+    """)
     suspend fun getTransaction(
         transactionId: String
     ): TransactionEntity?
+
+    @Query("""
+        DELETE FROM transactions
+        WHERE id = :transactionId
+    """)
+    suspend fun deleteTransactionById(
+        transactionId: String
+    )
+
+    @Query("""
+        DELETE FROM transactions
+        WHERE serviceId = :serviceId
+    """)
+    suspend fun deleteTransactionsByService(
+        serviceId: String
+    )
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAllTransactions()
@@ -114,6 +164,16 @@ interface ERequestDao {
     suspend fun insertRequirements(
         requirements: List<RequirementEntity>
     )
+
+    @Query("""
+        SELECT * FROM requirements
+        WHERE transactionId = :transactionId
+        AND isActive = 1
+        ORDER BY displayOrder ASC
+    """)
+    fun getRequirementsFlow(
+        transactionId: String
+    ): Flow<List<RequirementEntity>>
 
     @Query("""
         SELECT * FROM requirements
@@ -174,6 +234,16 @@ interface ERequestDao {
     suspend fun insertProcedureSteps(
         steps: List<ProcedureStepEntity>
     )
+
+    @Query("""
+        SELECT * FROM procedure_steps
+        WHERE transactionId = :transactionId
+        AND isActive = 1
+        ORDER BY stepNumber ASC
+    """)
+    fun getProcedureStepsFlow(
+        transactionId: String
+    ): Flow<List<ProcedureStepEntity>>
 
     @Query("""
         SELECT * FROM procedure_steps
@@ -278,6 +348,13 @@ interface ERequestDao {
         WHERE isActive = 1
         ORDER BY datePosted DESC
     """)
+    fun getAllActiveAnnouncementsFlow(): Flow<List<AnnouncementEntity>>
+
+    @Query("""
+        SELECT * FROM announcements
+        WHERE isActive = 1
+        ORDER BY datePosted DESC
+    """)
     suspend fun getAllActiveAnnouncements():
             List<AnnouncementEntity>
 
@@ -321,6 +398,13 @@ interface ERequestDao {
     suspend fun insertUpdateNotifications(
         notifications: List<UpdateNotificationEntity>
     )
+
+    @Query("""
+        SELECT * FROM update_notifications
+        WHERE isRead = 0
+        ORDER BY createdAt DESC
+    """)
+    fun getUnreadUpdateNotificationsFlow(): Flow<List<UpdateNotificationEntity>>
 
     @Query("""
         SELECT * FROM update_notifications
@@ -383,6 +467,14 @@ interface ERequestDao {
     suspend fun getUpdateNotification(
         notificationId: String
     ): UpdateNotificationEntity?
+
+    @Query("""
+        DELETE FROM update_notifications
+        WHERE transactionId = :transactionId
+    """)
+    suspend fun deleteUpdateNotificationsByTransaction(
+        transactionId: String
+    )
 
     @Query("DELETE FROM update_notifications")
     suspend fun deleteAllUpdateNotifications()

@@ -1,4 +1,4 @@
-﻿package com.example.request.features.transactions
+package com.example.request.features.transactions
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -42,6 +43,11 @@ class TransactionListActivity : AppCompatActivity() {
     private var serviceName: String = ""
     private var isRefreshing = false
     private var activeToast: Toast? = null
+    private var observeTransactionsJob: Job? = null
+
+    private val syncCompletionListener = {
+        // Handled automatically via Room Flow
+    }
 
     private fun showSingleToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
         activeToast?.cancel()
@@ -75,13 +81,18 @@ class TransactionListActivity : AppCompatActivity() {
         btnRefresh.setOnClickListener {
             refreshData()
         }
-
-        loadTransactions()
     }
 
-    override fun onResume() {
-        super.onResume()
-        loadTransactions()
+    override fun onStart() {
+        super.onStart()
+        FirestoreSyncManager.registerSyncCompletionListener(syncCompletionListener)
+        observeTransactions()
+    }
+
+    override fun onStop() {
+        FirestoreSyncManager.unregisterSyncCompletionListener(syncCompletionListener)
+        observeTransactionsJob?.cancel()
+        super.onStop()
     }
 
     private fun setupRecyclerView() {
@@ -101,12 +112,12 @@ class TransactionListActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadTransactions() {
-        lifecycleScope.launch {
-            val transactions = withContext(Dispatchers.IO) {
-                dao.getTransactionsByService(serviceId)
+    private fun observeTransactions() {
+        observeTransactionsJob?.cancel()
+        observeTransactionsJob = lifecycleScope.launch {
+            dao.getTransactionsByServiceFlow(serviceId).collect { transactions ->
+                displayTransactions(transactions)
             }
-            displayTransactions(transactions)
         }
     }
 

@@ -12,10 +12,12 @@ import com.example.request.features.splash.*
 import com.example.request.features.transactions.*
 import com.example.request.ui.custom.*
 
+import android.app.Activity
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +39,9 @@ class ERequestApplication :
             SupervisorJob() +
                     Dispatchers.IO
         )
+
+    private var startedActivityCount = 0
+    private var globalFirestoreListener: FirestoreUpdateListener? = null
 
 
     // =====================================================
@@ -60,6 +65,13 @@ class ERequestApplication :
         // =================================================
 
         ERequestBackgroundSyncWorker.schedulePeriodicSync(this)
+
+
+        // =================================================
+        // REAL-TIME FIRESTORE LISTENER (FOREGROUND-AWARE)
+        // =================================================
+
+        setupForegroundFirestoreListener()
 
 
         // =================================================
@@ -160,5 +172,59 @@ class ERequestApplication :
                     channel
                 )
         }
+    }
+
+
+    // =====================================================
+    // FOREGROUND REAL-TIME FIRESTORE LISTENER
+    // =====================================================
+
+    private fun setupForegroundFirestoreListener() {
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+
+            override fun onActivityStarted(activity: Activity) {
+                startedActivityCount++
+                if (startedActivityCount == 1) {
+                    startGlobalFirestoreListener()
+                }
+            }
+
+            override fun onActivityResumed(activity: Activity) {}
+            override fun onActivityPaused(activity: Activity) {}
+
+            override fun onActivityStopped(activity: Activity) {
+                startedActivityCount--
+                if (startedActivityCount <= 0) {
+                    startedActivityCount = 0
+                    stopGlobalFirestoreListener()
+                }
+            }
+
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) {}
+        })
+    }
+
+    private fun startGlobalFirestoreListener() {
+        if (globalFirestoreListener == null) {
+            globalFirestoreListener = FirestoreUpdateListener {
+                applicationScope.launch {
+                    try {
+                        FirestoreSyncManager(this@ERequestApplication).syncAllData()
+                        Log.d("ERequestApp", "Global real-time Firestore sync completed.")
+                    } catch (e: Exception) {
+                        Log.w("ERequestApp", "Global real-time Firestore sync failed: ${e.message}")
+                    }
+                }
+            }
+        }
+        globalFirestoreListener?.start()
+        Log.d("ERequestApp", "Global Firestore real-time listener started (app in foreground).")
+    }
+
+    private fun stopGlobalFirestoreListener() {
+        globalFirestoreListener?.stop()
+        Log.d("ERequestApp", "Global Firestore real-time listener stopped (app in background).")
     }
 }

@@ -343,6 +343,10 @@ class FirestoreSyncManager(
         database.withTransaction {
             if (canReconcileDeletions && servicesToDelete.isNotEmpty()) {
                 servicesToDelete.forEach { deletedService ->
+                    val relatedTransactions = dao.getTransactionsByService(deletedService.id)
+                    relatedTransactions.forEach { tx ->
+                        cascadeDeleteTransaction(tx.id)
+                    }
                     dao.deleteServiceById(deletedService.id)
                 }
             }
@@ -355,10 +359,84 @@ class FirestoreSyncManager(
 
 
     // =====================================================
+    // CASCADE TRANSACTION DELETION & CHECKLIST CLEANUP
+    // =====================================================
+
+    private suspend fun cascadeDeleteTransaction(transactionId: String) {
+        // 1. Delete associated local procedure step images from internal storage
+        val steps = dao.getProcedureSteps(transactionId)
+        steps.forEach { step ->
+            step.localImagePath?.takeIf { it.isNotBlank() }?.let { path ->
+                try {
+                    File(path).delete()
+                } catch (e: Exception) {
+                    Log.w("FirestoreSyncManager", "Failed to delete procedure image at '$path': ${e.message}")
+                }
+            }
+        }
+
+        // 2. Delete child records from Room
+        dao.deleteProcedureStepsByTransaction(transactionId)
+        dao.deleteRequirementsByTransaction(transactionId)
+        dao.deleteDepartmentGuidelinesByTransaction(transactionId)
+        dao.deleteUpdateNotificationsByTransaction(transactionId)
+
+        // 3. Delete the transaction itself
+        dao.deleteTransactionById(transactionId)
+
+        // 4. Clean up any saved checklist progress in SharedPreferences
+        cleanupChecklistProgressForTransaction(transactionId)
+    }
+
+    private fun cleanupChecklistProgressForTransaction(transactionId: String) {
+        try {
+            val prefs = context.applicationContext.getSharedPreferences(
+                "RequirementChecklistProgress",
+                Context.MODE_PRIVATE
+            )
+            val prefix = "${transactionId}_requirement_"
+            val keysToRemove = prefs.all.keys.filter { it.startsWith(prefix) }
+            if (keysToRemove.isNotEmpty()) {
+                val editor = prefs.edit()
+                keysToRemove.forEach { editor.remove(it) }
+                editor.apply()
+            }
+        } catch (e: Exception) {
+            Log.w("FirestoreSyncManager", "Failed to clean up checklist progress for transaction '$transactionId': ${e.message}")
+        }
+    }
+
+    private fun cleanupChecklistProgressForRequirement(transactionId: String, requirementId: String) {
+        try {
+            val prefs = context.applicationContext.getSharedPreferences(
+                "RequirementChecklistProgress",
+                Context.MODE_PRIVATE
+            )
+            val key = "${transactionId}_requirement_$requirementId"
+            if (prefs.contains(key)) {
+                prefs.edit().remove(key).apply()
+            }
+        } catch (e: Exception) {
+            Log.w("FirestoreSyncManager", "Failed to clean up checklist progress for requirement '$requirementId': ${e.message}")
+        }
+    }
+
+
+    // =====================================================
     // TRANSACTIONS
     // =====================================================
 
     private suspend fun syncTransactions(): Set<String> {
+
+        val snapshot =
+            firestore
+                .collection("transactions")
+                .get()
+                .await()
+
+        val isFromCache = snapshot.metadata.isFromCache
+        val hasPendingWrites = snapshot.metadata.hasPendingWrites()
+        val isServerConfirmed = !isFromCache && !hasPendingWrites
 
         val localBeforeSync =
             dao.getAllTransactionsForSync()
@@ -371,14 +449,10 @@ class FirestoreSyncManager(
                 it.id
             }
 
-        val snapshot =
-            firestore
-                .collection("transactions")
-                .get()
-                .await()
-
         val changedTransactionIds =
             mutableSetOf<String>()
+
+        var hasParsingErrors = false
 
         val transactions =
             snapshot.documents.mapNotNull { document ->
@@ -468,17 +542,36 @@ class FirestoreSyncManager(
 
                 } catch (e: Exception) {
 
+                    hasParsingErrors = true
                     recordParsingError("transactions", document.id, e)
 
                     null
                 }
             }
 
-        if (transactions.isNotEmpty()) {
+        val canReconcileDeletions = isServerConfirmed && !hasParsingErrors
+        val firestoreIds = snapshot.documents.map { it.id }.toSet()
+        val transactionsToDelete = localBeforeSync.filter { it.id !in firestoreIds }
 
-            dao.insertTransactions(
-                transactions
-            )
+        if (!isServerConfirmed) {
+            Log.w("FirestoreSyncManager", "Skipping transaction deletion reconciliation: snapshot is cached or has pending writes (isFromCache=$isFromCache, hasPendingWrites=$hasPendingWrites). Local data preserved.")
+        } else if (hasParsingErrors) {
+            Log.w("FirestoreSyncManager", "Skipping transaction deletion reconciliation: document parsing errors occurred. Local data preserved.")
+        }
+
+        database.withTransaction {
+            if (canReconcileDeletions && transactionsToDelete.isNotEmpty()) {
+                transactionsToDelete.forEach { deletedTx ->
+                    cascadeDeleteTransaction(deletedTx.id)
+                    changedTransactionIds.add(deletedTx.id)
+                }
+            }
+
+            if (transactions.isNotEmpty()) {
+                dao.insertTransactions(
+                    transactions
+                )
+            }
         }
 
         return changedTransactionIds
@@ -491,6 +584,16 @@ class FirestoreSyncManager(
 
     private suspend fun syncRequirements(): Set<String> {
 
+        val snapshot =
+            firestore
+                .collection("requirements")
+                .get()
+                .await()
+
+        val isFromCache = snapshot.metadata.isFromCache
+        val hasPendingWrites = snapshot.metadata.hasPendingWrites()
+        val isServerConfirmed = !isFromCache && !hasPendingWrites
+
         val localBeforeSync =
             dao.getAllRequirementsForSync()
 
@@ -502,19 +605,10 @@ class FirestoreSyncManager(
                 it.id
             }
 
-        val snapshot =
-            firestore
-                .collection("requirements")
-                .get()
-                .await()
-
-        val firestoreIds =
-            snapshot.documents
-                .map { it.id }
-                .toSet()
-
         val changedTransactionIds =
             mutableSetOf<String>()
+
+        var hasParsingErrors = false
 
         val requirements =
             snapshot.documents.mapNotNull { document ->
@@ -585,39 +679,41 @@ class FirestoreSyncManager(
 
                 } catch (e: Exception) {
 
-                    e.printStackTrace()
+                    hasParsingErrors = true
+                    recordParsingError("requirements", document.id, e)
                     null
                 }
             }
 
-        if (hadLocalData) {
+        val canReconcileDeletions = isServerConfirmed && !hasParsingErrors
+        val firestoreIds = snapshot.documents.map { it.id }.toSet()
+        val requirementsToDelete = localBeforeSync.filter { it.id !in firestoreIds }
 
-            localBeforeSync
-                .filter {
-                    it.id !in firestoreIds
-                }
-                .forEach { deletedRequirement ->
+        if (!isServerConfirmed) {
+            Log.w("FirestoreSyncManager", "Skipping requirements deletion reconciliation: snapshot is cached or has pending writes (isFromCache=$isFromCache, hasPendingWrites=$hasPendingWrites). Local data preserved.")
+        } else if (hasParsingErrors) {
+            Log.w("FirestoreSyncManager", "Skipping requirements deletion reconciliation: document parsing errors occurred. Local data preserved.")
+        }
 
-                    if (
-                        deletedRequirement.transactionId
-                            .isNotBlank()
-                    ) {
-                        changedTransactionIds.add(
-                            deletedRequirement.transactionId
-                        )
+        database.withTransaction {
+            if (canReconcileDeletions && requirementsToDelete.isNotEmpty()) {
+                requirementsToDelete.forEach { deletedRequirement ->
+                    if (deletedRequirement.transactionId.isNotBlank()) {
+                        changedTransactionIds.add(deletedRequirement.transactionId)
                     }
 
-                    dao.deleteRequirementById(
+                    dao.deleteRequirementById(deletedRequirement.id)
+
+                    cleanupChecklistProgressForRequirement(
+                        deletedRequirement.transactionId,
                         deletedRequirement.id
                     )
                 }
-        }
+            }
 
-        if (requirements.isNotEmpty()) {
-
-            dao.insertRequirements(
-                requirements
-            )
+            if (requirements.isNotEmpty()) {
+                dao.insertRequirements(requirements)
+            }
         }
 
         return changedTransactionIds
@@ -726,6 +822,16 @@ class FirestoreSyncManager(
 
     private suspend fun syncProcedureSteps(): Set<String> {
 
+        val snapshot =
+            firestore
+                .collection("procedure_steps")
+                .get()
+                .await()
+
+        val isFromCache = snapshot.metadata.isFromCache
+        val hasPendingWrites = snapshot.metadata.hasPendingWrites()
+        val isServerConfirmed = !isFromCache && !hasPendingWrites
+
         val localBeforeSync =
             dao.getAllProcedureStepsForSync()
 
@@ -737,20 +843,10 @@ class FirestoreSyncManager(
                 it.id
             }
 
-        val snapshot =
-            firestore
-                .collection("procedure_steps")
-                .get()
-                .await()
-
-        val firestoreIds =
-            snapshot.documents
-                .map { it.id }
-                .toSet()
-
         val changedTransactionIds =
             mutableSetOf<String>()
 
+        var hasParsingErrors = false
 
         val steps =
             snapshot.documents.mapNotNull { document ->
@@ -1048,7 +1144,8 @@ class FirestoreSyncManager(
 
                 } catch (e: Exception) {
 
-                    e.printStackTrace()
+                    hasParsingErrors = true
+                    recordParsingError("procedure_steps", document.id, e)
 
                     null
                 }
@@ -1059,14 +1156,19 @@ class FirestoreSyncManager(
         // SAVE PROCEDURE STEPS TO ROOM
         // ---------------------------------------------
 
-        if (hadLocalData) {
+        val canReconcileDeletions = isServerConfirmed && !hasParsingErrors
+        val firestoreIds = snapshot.documents.map { it.id }.toSet()
+        val stepsToDelete = localBeforeSync.filter { it.id !in firestoreIds }
 
-            localBeforeSync
-                .filter {
-                    it.id !in firestoreIds
-                }
-                .forEach { deletedStep ->
+        if (!isServerConfirmed) {
+            Log.w("FirestoreSyncManager", "Skipping procedure steps deletion reconciliation: snapshot is cached or has pending writes (isFromCache=$isFromCache, hasPendingWrites=$hasPendingWrites). Local data preserved.")
+        } else if (hasParsingErrors) {
+            Log.w("FirestoreSyncManager", "Skipping procedure steps deletion reconciliation: document parsing errors occurred. Local data preserved.")
+        }
 
+        database.withTransaction {
+            if (canReconcileDeletions && stepsToDelete.isNotEmpty()) {
+                stepsToDelete.forEach { deletedStep ->
                     if (
                         deletedStep.transactionId
                             .isNotBlank()
@@ -1082,7 +1184,7 @@ class FirestoreSyncManager(
                             try {
                                 File(path).delete()
                             } catch (e: Exception) {
-                                e.printStackTrace()
+                                Log.w("FirestoreSyncManager", "Failed to delete procedure image at '$path': ${e.message}")
                             }
                         }
 
@@ -1090,13 +1192,13 @@ class FirestoreSyncManager(
                         deletedStep.id
                     )
                 }
-        }
+            }
 
-        if (steps.isNotEmpty()) {
-
-            dao.insertProcedureSteps(
-                steps
-            )
+            if (steps.isNotEmpty()) {
+                dao.insertProcedureSteps(
+                    steps
+                )
+            }
         }
 
         return changedTransactionIds
@@ -1278,6 +1380,18 @@ class FirestoreSyncManager(
 
     private suspend fun syncDepartmentGuidelines(): Set<String> {
 
+        val snapshot =
+            firestore
+                .collection(
+                    "department_guidelines"
+                )
+                .get()
+                .await()
+
+        val isFromCache = snapshot.metadata.isFromCache
+        val hasPendingWrites = snapshot.metadata.hasPendingWrites()
+        val isServerConfirmed = !isFromCache && !hasPendingWrites
+
         val localBeforeSync =
             dao.getAllDepartmentGuidelinesForSync()
 
@@ -1289,21 +1403,10 @@ class FirestoreSyncManager(
                 it.id
             }
 
-        val snapshot =
-            firestore
-                .collection(
-                    "department_guidelines"
-                )
-                .get()
-                .await()
-
-        val firestoreIds =
-            snapshot.documents
-                .map { it.id }
-                .toSet()
-
         val changedTransactionIds =
             mutableSetOf<String>()
+
+        var hasParsingErrors = false
 
         val guidelines =
             snapshot.documents.mapNotNull {
@@ -1385,19 +1488,25 @@ class FirestoreSyncManager(
 
                 } catch (e: Exception) {
 
-                    e.printStackTrace()
+                    hasParsingErrors = true
+                    recordParsingError("department_guidelines", document.id, e)
                     null
                 }
             }
 
-        if (hadLocalData) {
+        val canReconcileDeletions = isServerConfirmed && !hasParsingErrors
+        val firestoreIds = snapshot.documents.map { it.id }.toSet()
+        val guidelinesToDelete = localBeforeSync.filter { it.id !in firestoreIds }
 
-            localBeforeSync
-                .filter {
-                    it.id !in firestoreIds
-                }
-                .forEach { deletedGuideline ->
+        if (!isServerConfirmed) {
+            Log.w("FirestoreSyncManager", "Skipping department guidelines deletion reconciliation: snapshot is cached or has pending writes (isFromCache=$isFromCache, hasPendingWrites=$hasPendingWrites). Local data preserved.")
+        } else if (hasParsingErrors) {
+            Log.w("FirestoreSyncManager", "Skipping department guidelines deletion reconciliation: document parsing errors occurred. Local data preserved.")
+        }
 
+        database.withTransaction {
+            if (canReconcileDeletions && guidelinesToDelete.isNotEmpty()) {
+                guidelinesToDelete.forEach { deletedGuideline ->
                     if (
                         deletedGuideline.transactionId
                             .isNotBlank()
@@ -1411,13 +1520,13 @@ class FirestoreSyncManager(
                         deletedGuideline.id
                     )
                 }
-        }
+            }
 
-        if (guidelines.isNotEmpty()) {
-
-            dao.insertDepartmentGuidelines(
-                guidelines
-            )
+            if (guidelines.isNotEmpty()) {
+                dao.insertDepartmentGuidelines(
+                    guidelines
+                )
+            }
         }
 
         return changedTransactionIds

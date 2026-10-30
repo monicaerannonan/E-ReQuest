@@ -51,23 +51,26 @@ class ProgressActivity : AppCompatActivity() {
 
         setupRecyclerView()
 
-        NavAnimationHelper.applyNavBouncePress(navHome) {
-            NavAnimationHelper.seamlessNavigate(
-                this,
-                Intent(this, HomeActivity::class.java)
-            )
-        }
+        NavAnimationHelper.setupSlidingBottomNav(
+            activity = this,
+            activeTabIndex = 2
+        )
+    }
 
-        NavAnimationHelper.applyNavBouncePress(navServices) {
-            NavAnimationHelper.seamlessNavigate(
-                this,
-                Intent(this, ServicesActivity::class.java)
-            )
+    private val syncCompletionListener: () -> Unit = {
+        if (!isFinishing && !isDestroyed) {
+            loadProgress()
         }
+    }
 
-        NavAnimationHelper.applyNavBouncePress(navProgress) {
-            // Already on Progress screen - bounce animation still plays delightfully
-        }
+    override fun onStart() {
+        super.onStart()
+        FirestoreSyncManager.registerSyncCompletionListener(syncCompletionListener)
+    }
+
+    override fun onStop() {
+        FirestoreSyncManager.unregisterSyncCompletionListener(syncCompletionListener)
+        super.onStop()
     }
 
     override fun onResume() {

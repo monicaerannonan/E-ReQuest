@@ -114,12 +114,6 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var networkMonitor: NetworkMonitor
 
     // =====================================================
-    // FIRESTORE REAL-TIME LISTENER
-    // =====================================================
-
-    private lateinit var firestoreUpdateListener: FirestoreUpdateListener
-
-    // =====================================================
     // SEARCH DATA
     // =====================================================
 
@@ -319,24 +313,6 @@ class HomeActivity : AppCompatActivity() {
                 }
             }
 
-        // =================================================
-        // FIRESTORE REAL-TIME UPDATE LISTENER
-        // =================================================
-
-        firestoreUpdateListener =
-            FirestoreUpdateListener {
-
-                runOnUiThread {
-
-                    if (
-                        isInternetAvailable() &&
-                        !isSyncing
-                    ) {
-
-                        syncData(isSilent = true)
-                    }
-                }
-            }
 
         // =================================================
         // LOAD SAVED ROOM DATA
@@ -370,23 +346,10 @@ class HomeActivity : AppCompatActivity() {
         // BOTTOM NAVIGATION
         // =================================================
 
-        NavAnimationHelper.applyNavBouncePress(navHome) {
-            // Already on Home - bounce animation still plays delightfully
-        }
-
-        NavAnimationHelper.applyNavBouncePress(navServices) {
-            NavAnimationHelper.seamlessNavigate(
-                this,
-                Intent(this, ServicesActivity::class.java)
-            )
-        }
-
-        NavAnimationHelper.applyNavBouncePress(navProgress) {
-            NavAnimationHelper.seamlessNavigate(
-                this,
-                Intent(this, ProgressActivity::class.java)
-            )
-        }
+        NavAnimationHelper.setupSlidingBottomNav(
+            activity = this,
+            activeTabIndex = 0
+        )
     }
 
     // =====================================================
@@ -403,10 +366,6 @@ class HomeActivity : AppCompatActivity() {
         if (::networkMonitor.isInitialized) {
             networkMonitor.start()
         }
-
-        if (::firestoreUpdateListener.isInitialized) {
-            firestoreUpdateListener.start()
-        }
     }
 
     override fun onStop() {
@@ -416,10 +375,6 @@ class HomeActivity : AppCompatActivity() {
 
         if (::networkMonitor.isInitialized) {
             networkMonitor.stop()
-        }
-
-        if (::firestoreUpdateListener.isInitialized) {
-            firestoreUpdateListener.stop()
         }
 
         super.onStop()
@@ -1742,10 +1697,6 @@ class HomeActivity : AppCompatActivity() {
 
         if (::networkMonitor.isInitialized) {
             networkMonitor.stop()
-        }
-
-        if (::firestoreUpdateListener.isInitialized) {
-            firestoreUpdateListener.stop()
         }
 
         super.onDestroy()

@@ -161,138 +161,157 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/servicesSectionHeader" />
 
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/bottomNavigation"
         android:layout_width="0dp"
         android:layout_height="72dp"
         android:background="@drawable/bg_bottom_nav_bar"
         android:elevation="8dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
         android:clipChildren="false"
         android:clipToPadding="false"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- Inactive Tab: Home -->
-        <LinearLayout
-            android:id="@+id/navHome"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:background="?attr/selectableItemBackgroundBorderless">
+        <!-- Animated Sliding Indicator Pill -->
+        <View
+            android:id="@+id/navSlidingIndicator"
+            android:layout_width="64dp"
+            android:layout_height="32dp"
+            android:layout_gravity="top|start"
+            android:visibility="invisible"
+            android:background="@drawable/bg_nav_pill_active" />
 
-            <FrameLayout
-                android:layout_width="64dp"
-                android:layout_height="32dp"
+        <LinearLayout
+            android:id="@+id/bottomNavTabs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@android:color/transparent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+
+            <!-- Inactive Tab: Home -->
+            <LinearLayout
+                android:id="@+id/navHome"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
                 android:clipChildren="false"
                 android:clipToPadding="false"
-                android:background="@android:color/transparent">
+                android:background="?attr/selectableItemBackgroundBorderless">
 
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="Home"
-                    android:src="@drawable/ic_nav_home_inactive" />
-            </FrameLayout>
+                <FrameLayout
+                    android:layout_width="64dp"
+                    android:layout_height="32dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:background="@android:color/transparent">
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="Home"
-                android:textColor="@color/nav_inactive"
-                android:textSize="12sp" />
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="Home"
+                        android:src="@drawable/ic_nav_home_inactive" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Home"
+                    android:textColor="@color/nav_inactive"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
+
+            <!-- Active Tab: Services -->
+            <LinearLayout
+                android:id="@+id/navServices"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:background="?attr/selectableItemBackgroundBorderless">
+
+                <FrameLayout
+                    android:layout_width="64dp"
+                    android:layout_height="32dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:background="@android:color/transparent">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="Services"
+                        android:src="@drawable/ic_nav_services_active" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Services"
+                    android:textColor="@color/nav_active_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <!-- Inactive Tab: Progress -->
+            <LinearLayout
+                android:id="@+id/navProgress"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:background="?attr/selectableItemBackgroundBorderless">
+
+                <FrameLayout
+                    android:layout_width="64dp"
+                    android:layout_height="32dp"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:background="@android:color/transparent">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="Progress"
+                        android:src="@drawable/ic_nav_progress_inactive" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:text="Progress"
+                    android:textColor="@color/nav_inactive"
+                    android:textSize="12sp" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
-        <!-- Active Tab: Services -->
-        <LinearLayout
-            android:id="@+id/navServices"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:background="?attr/selectableItemBackgroundBorderless">
-
-            <FrameLayout
-                android:layout_width="64dp"
-                android:layout_height="32dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:background="@drawable/bg_nav_pill_active">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="Services"
-                    android:src="@drawable/ic_nav_services_active" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="Services"
-                android:textColor="@color/nav_active_primary"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-        </LinearLayout>
-
-        <!-- Inactive Tab: Progress -->
-        <LinearLayout
-            android:id="@+id/navProgress"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:background="?attr/selectableItemBackgroundBorderless">
-
-            <FrameLayout
-                android:layout_width="64dp"
-                android:layout_height="32dp"
-                android:clipChildren="false"
-                android:clipToPadding="false"
-                android:background="@android:color/transparent">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="Progress"
-                    android:src="@drawable/ic_nav_progress_inactive" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:text="Progress"
-                android:textColor="@color/nav_inactive"
-                android:textSize="12sp" />
-
-        </LinearLayout>
-
-    </LinearLayout>
+    </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
