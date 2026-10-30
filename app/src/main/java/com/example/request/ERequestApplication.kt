@@ -1,4 +1,4 @@
-﻿package com.example.request
+package com.example.request
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -91,7 +91,7 @@ class ERequestApplication :
 
 
         // =================================================
-        // INITIAL FIRESTORE â†’ ROOM SYNC
+        // INITIAL FIRESTORE -> ROOM SYNC
         // =================================================
 
         applicationScope.launch {

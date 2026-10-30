@@ -1,4 +1,4 @@
-﻿package com.example.request.features.notifications
+package com.example.request.features.notifications
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -120,7 +120,7 @@ class ERequestFirebaseMessagingService :
             try {
                 val now = System.currentTimeMillis()
                 val formattedDate = SimpleDateFormat(
-                    "MMM dd, yyyy â€¢ hh:mm a",
+                    "MMM dd, yyyy \u2022 hh:mm a",
                     Locale.getDefault()
                 ).format(Date(now))
 

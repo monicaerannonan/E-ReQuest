@@ -1,4 +1,4 @@
-﻿package com.example.request.data.sync
+package com.example.request.data.sync
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -672,7 +672,7 @@ class FirestoreSyncManager(
 
             val formattedDate =
                 SimpleDateFormat(
-                    "MMM dd, yyyy â€¢ hh:mm a",
+                    "MMM dd, yyyy \u2022 hh:mm a",
                     Locale.getDefault()
                 ).format(
                     Date(currentTime)

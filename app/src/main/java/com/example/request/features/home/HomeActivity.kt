@@ -992,6 +992,7 @@ class HomeActivity : AppCompatActivity() {
 
                             text =
                                 update.dateTime
+                                    .replace("\u00E2\u20AC\u00A2", "\u2022")
 
                             textSize =
                                 11f
@@ -1363,7 +1364,7 @@ class HomeActivity : AppCompatActivity() {
     }
 
     // =====================================================
-    // ACTUAL FIRESTORE â†’ ROOM REFRESH
+    // ACTUAL FIRESTORE -> ROOM REFRESH
     // =====================================================
 
     private fun syncData(isSilent: Boolean = false) {
@@ -1398,7 +1399,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         // =================================================
-        // FIRESTORE â†’ ROOM
+        // FIRESTORE -> ROOM
         // =================================================
 
         lifecycleScope.launch {
@@ -1419,7 +1420,7 @@ class HomeActivity : AppCompatActivity() {
 
                 val dateTime =
                     SimpleDateFormat(
-                        "MMM dd, yyyy â€¢ hh:mm a",
+                        "MMM dd, yyyy \u2022 hh:mm a",
                         Locale.getDefault()
                     ).format(
                         Date()
@@ -1498,11 +1499,11 @@ class HomeActivity : AppCompatActivity() {
                 isInternetAvailable()
             ) {
 
-                "â— Online"
+                "\u25CF Online"
 
             } else {
 
-                "â— Offline"
+                "\u25CF Offline"
             }
     }
 
@@ -1559,7 +1560,25 @@ class HomeActivity : AppCompatActivity() {
 
             } else {
 
-                "Last updated: $lastUpdated"
+                val cleaned = lastUpdated
+                    .replace("\u00E2\u20AC\u00A2", "\u2022")
+                    .replace("\u00E2\u2014\u008F", "\u25CF")
+                    .replace("\u00E2\u2014", "\u25CF")
+
+                if (cleaned != lastUpdated) {
+                    getSharedPreferences(
+                        "EReQuestPreferences",
+                        MODE_PRIVATE
+                    )
+                        .edit()
+                        .putString(
+                            "last_updated",
+                            cleaned
+                        )
+                        .apply()
+                }
+
+                "Last updated: $cleaned"
             }
     }
 

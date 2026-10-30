@@ -1,4 +1,4 @@
-﻿package com.example.request.features.transactions
+package com.example.request.features.transactions
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -929,7 +929,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                 TextView(this).apply {
 
                     text =
-                        "â€¢ $requirement"
+                        "\u2022 $requirement"
 
                     textSize =
                         14f
@@ -1057,7 +1057,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                         TextView(this).apply {
 
                             text =
-                                "${step.websiteName?.trim()?.takeIf { it.isNotBlank() } ?: "Open Website"} â†—"
+                                "${step.websiteName?.trim()?.takeIf { it.isNotBlank() } ?: "Open Website"} \u2197"
 
                             textSize =
                                 14f
@@ -1500,7 +1500,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                 TextView(this).apply {
 
                     text =
-                        "â€¢ $guideline"
+                        "\u2022 $guideline"
 
                     textSize =
                         14f
