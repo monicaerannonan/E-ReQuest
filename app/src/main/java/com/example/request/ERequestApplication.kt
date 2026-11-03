@@ -117,6 +117,10 @@ class ERequestApplication :
 
                 syncManager.syncAllData()
 
+                com.example.request.features.auth.StudentAuthRepository(
+                    this@ERequestApplication
+                ).syncPendingOfflineLogs()
+
                 Log.d(
                     "ERequestSync",
                     "Firestore to Room synchronization successful."

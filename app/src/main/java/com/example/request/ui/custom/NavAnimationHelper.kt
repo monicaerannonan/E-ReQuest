@@ -17,9 +17,12 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import com.example.request.R
+import com.example.request.features.auth.StudentAuthActivity
+import com.example.request.features.auth.StudentSessionManager
 import com.example.request.features.home.HomeActivity
 import com.example.request.features.progress.ProgressActivity
 import com.example.request.features.services.ServicesActivity
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 object NavAnimationHelper {
 
@@ -37,6 +40,66 @@ object NavAnimationHelper {
     )
 
     /**
+     * Populates the active/currently open Student Number badge in the screen header.
+     */
+    fun bindHeaderStudentNumber(activity: Activity) {
+        val tvStudentNumber = activity.findViewById<TextView>(R.id.tvHeaderStudentNumber) ?: return
+        val badgeContainer = activity.findViewById<View>(R.id.layoutHeaderStudentBadge)
+
+        val sessionManager = StudentSessionManager(activity)
+        val activeId = sessionManager.getActiveStudentNumber()
+            ?: sessionManager.getSavedAccounts().firstOrNull()?.studentNumber
+
+        if (!activeId.isNullOrBlank()) {
+            tvStudentNumber.text = "Student ID: $activeId"
+            badgeContainer?.visibility = View.VISIBLE
+        } else {
+            tvStudentNumber.text = "Student ID: —"
+            badgeContainer?.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Shows a high-contrast confirmation BottomSheet and logs the student back out to PIN Login.
+     */
+    fun showLogoutConfirmationSheet(activity: Activity) {
+        if (activity.isFinishing || activity.isDestroyed) return
+
+        val sessionManager = StudentSessionManager(activity)
+        val activeId = sessionManager.getActiveStudentNumber()
+            ?: sessionManager.getSavedAccounts().firstOrNull()?.studentNumber
+
+        val dialog = BottomSheetDialog(activity)
+        val sheetView = activity.layoutInflater.inflate(R.layout.dialog_logout_confirm, null)
+        dialog.setContentView(sheetView)
+
+        val tvMessage = sheetView.findViewById<TextView>(R.id.tvLogoutConfirmMessage)
+        val btnCancel = sheetView.findViewById<View>(R.id.btnCancelLogout)
+        val btnConfirm = sheetView.findViewById<View>(R.id.btnConfirmLogout)
+
+        tvMessage.text = if (!activeId.isNullOrBlank()) {
+            "Are you sure you want to log out of account $activeId? You will be returned to the PIN login screen."
+        } else {
+            "Are you sure you want to log out? You will be returned to the PIN login screen."
+        }
+
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        btnConfirm.setOnClickListener {
+            dialog.dismiss()
+            val intent = Intent(activity, StudentAuthActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            activity.startActivity(intent)
+            activity.finish()
+        }
+
+        dialog.show()
+    }
+
+    /**
      * Initializes the bottom navigation with a shared sliding pill indicator.
      * Snappy, instantaneous navigation without sluggish delays or shockwave rings.
      */
@@ -44,11 +107,14 @@ object NavAnimationHelper {
         activity: Activity,
         activeTabIndex: Int
     ) {
+        bindHeaderStudentNumber(activity)
+
         val bottomNavContainer = activity.findViewById<ViewGroup>(R.id.bottomNavigation) ?: return
         val slidingIndicator = activity.findViewById<View>(R.id.navSlidingIndicator) ?: return
         val navHome = activity.findViewById<ViewGroup>(R.id.navHome) ?: return
         val navServices = activity.findViewById<ViewGroup>(R.id.navServices) ?: return
         val navProgress = activity.findViewById<ViewGroup>(R.id.navProgress) ?: return
+        val navLogout = activity.findViewById<View>(R.id.navLogout)
 
         bottomNavContainer.clipChildren = false
         bottomNavContainer.clipToPadding = false
@@ -117,6 +183,12 @@ object NavAnimationHelper {
                 allTabs = tabDataList,
                 slidingIndicator = slidingIndicator
             )
+        }
+
+        // Wire Log Out button in bottom navigation bar
+        navLogout?.setOnClickListener { v ->
+            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            showLogoutConfirmationSheet(activity)
         }
     }
 

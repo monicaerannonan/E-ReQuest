@@ -540,7 +540,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
                         entity.stepNumber,
 
                     instruction =
-                        entity.instruction,
+                        CatalogCryptoUtils.decrypt(entity.instruction),
 
                     imageResource =
                         getLocalDrawableResource(
@@ -548,19 +548,27 @@ class TransactionDetailsActivity : AppCompatActivity() {
                         ),
 
                     remoteImageUrl =
-                        entity.remoteImageUrl,
+                        entity.remoteImageUrl?.let {
+                            CatalogCryptoUtils.decrypt(it).trim().takeIf { url -> url.isNotBlank() }
+                        },
 
                     localImagePath =
                         entity.localImagePath,
 
                     imageCaption =
-                        entity.imageCaption,
+                        entity.imageCaption?.let {
+                            CatalogCryptoUtils.decrypt(it).trim().takeIf { caption -> caption.isNotBlank() }
+                        },
 
                     websiteName =
-                        entity.websiteName,
+                        entity.websiteName?.let {
+                            CatalogCryptoUtils.decrypt(it).trim().takeIf { name -> name.isNotBlank() }
+                        },
 
                     websiteUrl =
-                        entity.websiteUrl
+                        entity.websiteUrl?.let {
+                            CatalogCryptoUtils.decrypt(it).trim().takeIf { url -> url.isNotBlank() }
+                        }
                 )
             }
 
@@ -688,51 +696,48 @@ class TransactionDetailsActivity : AppCompatActivity() {
             Dispatchers.IO
         ) {
 
-            var connection:
-                    HttpURLConnection? = null
+            val cleanRemoteUrl = CatalogCryptoUtils.decrypt(remoteImageUrl).trim()
+            if (cleanRemoteUrl.isBlank()) {
+                return@withContext null
+            }
+
+            var currentUrl = cleanRemoteUrl
+            var redirects = 0
+            var finalConnection: HttpURLConnection? = null
 
             try {
+                while (redirects < 5) {
+                    val candidateUrl = URL(currentUrl)
+                    val conn = candidateUrl.openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 20000
+                    conn.instanceFollowRedirects = true
+                    conn.doInput = true
+                    conn.connect()
 
-                val url =
-                    URL(
-                        remoteImageUrl
-                    )
-
-                connection =
-                    url.openConnection()
-                            as HttpURLConnection
-
-                connection.requestMethod =
-                    "GET"
-
-                connection.connectTimeout =
-                    15000
-
-                connection.readTimeout =
-                    20000
-
-                connection.instanceFollowRedirects =
-                    true
-
-                connection.doInput =
-                    true
-
-                connection.connect()
-
-                if (
-                    connection.responseCode !in
-                    200..299
-                ) {
-
-                    return@withContext null
+                    val responseCode = conn.responseCode
+                    if (responseCode in 300..399) {
+                        val location = conn.getHeaderField("Location")
+                        conn.disconnect()
+                        if (!location.isNullOrBlank()) {
+                            currentUrl = URL(candidateUrl, location).toString()
+                            redirects++
+                            continue
+                        } else {
+                            return@withContext null
+                        }
+                    } else if (responseCode !in 200..299) {
+                        conn.disconnect()
+                        return@withContext null
+                    } else {
+                        finalConnection = conn
+                        break
+                    }
                 }
 
-                connection.inputStream.use {
-                        inputStream ->
-
-                    BitmapFactory.decodeStream(
-                        inputStream
-                    )
+                finalConnection?.inputStream?.use { inputStream ->
+                    BitmapFactory.decodeStream(inputStream)
                 }
 
             } catch (e: Exception) {
@@ -743,7 +748,7 @@ class TransactionDetailsActivity : AppCompatActivity() {
 
             } finally {
 
-                connection?.disconnect()
+                finalConnection?.disconnect()
             }
         }
     }
@@ -1457,9 +1462,23 @@ class TransactionDetailsActivity : AppCompatActivity() {
 
         try {
 
+            val decryptedUrl = CatalogCryptoUtils.decrypt(websiteUrl).trim()
+            if (decryptedUrl.isBlank()) {
+                return
+            }
+
+            val validUrl = if (
+                !decryptedUrl.startsWith("http://", ignoreCase = true) &&
+                !decryptedUrl.startsWith("https://", ignoreCase = true)
+            ) {
+                "https://$decryptedUrl"
+            } else {
+                decryptedUrl
+            }
+
             val uri =
                 Uri.parse(
-                    websiteUrl.trim()
+                    validUrl
                 )
 
             val scheme =

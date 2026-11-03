@@ -1,4 +1,4 @@
-﻿package com.example.request.data.sync
+package com.example.request.data.sync
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -119,6 +119,11 @@ class ERequestBackgroundSyncWorker(
             //    for any modified transactions, requirements, procedures, or guidelines.
             val syncManager = FirestoreSyncManager(applicationContext)
             syncManager.syncAllData()
+
+            // Flush any queued offline 4-digit PIN login/switch logs for Admin
+            com.example.request.features.auth.StudentAuthRepository(
+                applicationContext
+            ).syncPendingOfflineLogs()
 
             // 2. Ensure any unnotified updates in Room (isRead = 0, isNotified = 0)
             //    are dispatched once to the system status bar via NotificationCompat.

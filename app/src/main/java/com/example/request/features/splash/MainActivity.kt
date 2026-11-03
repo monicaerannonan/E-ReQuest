@@ -1,4 +1,4 @@
-﻿package com.example.request.features.splash
+package com.example.request.features.splash
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -76,12 +76,12 @@ class MainActivity : AppCompatActivity() {
             progressAnimator.start()
         }
 
-        // Seamless transition to HomeActivity
+        // Seamless transition to StudentAuthActivity (PIN Login / Registration)
         Handler(Looper.getMainLooper()).postDelayed({
-            val intent = Intent(this, HomeActivity::class.java)
+            val intent = Intent(this, com.example.request.features.auth.StudentAuthActivity::class.java)
             startActivity(intent)
 
-            // Para hindi makabalik sa Splash Screen
+            // Prevent navigating back to Splash Screen
             finish()
         }, 2000)
     }

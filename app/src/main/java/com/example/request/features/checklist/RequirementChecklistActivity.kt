@@ -325,7 +325,7 @@ class RequirementChecklistActivity : AppCompatActivity() {
     ) {
 
         getSharedPreferences(
-            "RequirementChecklistProgress",
+            com.example.request.features.auth.StudentSessionManager.getChecklistPrefsName(this),
             MODE_PRIVATE
         )
             .edit()
@@ -345,7 +345,7 @@ class RequirementChecklistActivity : AppCompatActivity() {
     ): Boolean {
 
         return getSharedPreferences(
-            "RequirementChecklistProgress",
+            com.example.request.features.auth.StudentSessionManager.getChecklistPrefsName(this),
             MODE_PRIVATE
         )
             .getBoolean(
@@ -362,7 +362,7 @@ class RequirementChecklistActivity : AppCompatActivity() {
 
         val preferences =
             getSharedPreferences(
-                "RequirementChecklistProgress",
+                com.example.request.features.auth.StudentSessionManager.getChecklistPrefsName(this),
                 MODE_PRIVATE
             )
 

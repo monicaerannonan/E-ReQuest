@@ -82,6 +82,7 @@ class ServicesActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
+        NavAnimationHelper.bindHeaderStudentNumber(this)
         FirestoreSyncManager.registerSyncCompletionListener(syncCompletionListener)
         observeServices()
     }

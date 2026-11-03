@@ -387,6 +387,8 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
 
+        NavAnimationHelper.bindHeaderStudentNumber(this)
+
         if (::dao.isInitialized) {
 
             loadSearchData()

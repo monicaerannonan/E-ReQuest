@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/white"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingStart="24dp"
+    android:paddingTop="16dp"
+    android:paddingEnd="24dp"
+    android:paddingBottom="28dp">
+
+    <!-- Drag Handle -->
+    <View
+        android:layout_width="42dp"
+        android:layout_height="4dp"
+        android:background="@color/divider" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Enter your 4-Digit PIN"
+        android:textColor="@color/primary_dark"
+        android:textSize="19sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvKeypadStudentNumber"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:letterSpacing="0.04"
+        android:text="CA-2026-00000"
+        android:textColor="#155EC4"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvKeypadNetworkBadge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="Works Online &amp; Offline"
+        android:textColor="@color/text_secondary"
+        android:textSize="11.5sp" />
+
+    <!-- 4 PIN Dots -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="22dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <View
+            android:id="@+id/pinDot1"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_margin="10dp"
+            android:background="@drawable/bg_pin_dot_empty" />
+
+        <View
+            android:id="@+id/pinDot2"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_margin="10dp"
+            android:background="@drawable/bg_pin_dot_empty" />
+
+        <View
+            android:id="@+id/pinDot3"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_margin="10dp"
+            android:background="@drawable/bg_pin_dot_empty" />
+
+        <View
+            android:id="@+id/pinDot4"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_margin="10dp"
+            android:background="@drawable/bg_pin_dot_empty" />
+    </LinearLayout>
+
+    <!-- Error / Lockout Message -->
+    <TextView
+        android:id="@+id/tvKeypadError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:minHeight="20dp"
+        android:text=""
+        android:textColor="@color/error"
+        android:textSize="12.5sp"
+        android:textStyle="bold" />
+
+    <!-- Numeric Keypad Grid (3x4) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <!-- Row 1: 1 2 3 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/key1"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="1"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key2"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="2"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key3"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="3"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Row 2: 4 5 6 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/key4"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="4"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key5"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="5"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key6"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="6"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Row 3: 7 8 9 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/key7"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="7"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key8"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="8"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key9"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="9"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Row 4: Forgot | 0 | Backspace -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/keyForgotPin"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="Forgot?"
+                android:textColor="#155EC4"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/key0"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="0"
+                android:textColor="@color/primary_dark"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/keyBackspace"
+                android:layout_width="68dp"
+                android:layout_height="68dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/bg_keypad_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="⌫"
+                android:textColor="@color/primary_dark"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>

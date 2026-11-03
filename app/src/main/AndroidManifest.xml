@@ -69,6 +69,19 @@
 
 
         <!-- ============================================= -->
+        <!-- STUDENT AUTH / PIN LOGIN SCREEN               -->
+        <!-- ============================================= -->
+
+        <activity
+
+            android:name=".features.auth.StudentAuthActivity"
+
+            android:exported="false"
+
+            android:windowSoftInputMode="adjustResize" />
+
+
+        <!-- ============================================= -->
         <!-- HOME SCREEN                                   -->
         <!-- ============================================= -->
 

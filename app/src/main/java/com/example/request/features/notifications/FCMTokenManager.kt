@@ -1,4 +1,4 @@
-﻿package com.example.request.features.notifications
+package com.example.request.features.notifications
 
 import com.example.request.R
 import com.example.request.data.local.*
@@ -47,34 +47,7 @@ class FCMTokenManager(
     // =====================================================
 
     private fun getInstallationId(): String {
-
-        val preferences =
-            applicationContext.getSharedPreferences(
-                PREFS_NAME,
-                Context.MODE_PRIVATE
-            )
-
-        var installationId =
-            preferences.getString(
-                KEY_INSTALLATION_ID,
-                null
-            )
-
-        if (installationId.isNullOrBlank()) {
-
-            installationId =
-                UUID.randomUUID().toString()
-
-            preferences
-                .edit()
-                .putString(
-                    KEY_INSTALLATION_ID,
-                    installationId
-                )
-                .apply()
-        }
-
-        return installationId
+        return com.example.request.features.auth.DeviceInfoProvider.getOrCreateInstallationId(applicationContext)
     }
 
 

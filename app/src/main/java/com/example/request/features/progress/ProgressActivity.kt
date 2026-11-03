@@ -75,6 +75,7 @@ class ProgressActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        NavAnimationHelper.bindHeaderStudentNumber(this)
         loadProgress()
     }
 
@@ -94,7 +95,7 @@ class ProgressActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val activeProgressItems = withContext(Dispatchers.IO) {
                 val prefs = getSharedPreferences(
-                    "RequirementChecklistProgress",
+                    com.example.request.features.auth.StudentSessionManager.getChecklistPrefsName(this@ProgressActivity),
                     MODE_PRIVATE
                 )
 

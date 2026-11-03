@@ -320,12 +320,10 @@ class FirestoreSyncManager(
                         id = document.id,
 
                         name =
-                            document.getString("name")
-                                ?: "",
+                            CatalogCryptoUtils.decrypt(document.getString("name")),
 
                         description =
-                            document.getString("description")
-                                ?: "",
+                            CatalogCryptoUtils.decrypt(document.getString("description")),
 
                         isActive =
                             document.getBoolean("isActive")
@@ -491,24 +489,16 @@ class FirestoreSyncManager(
                                 ) ?: "",
 
                             name =
-                                document.getString(
-                                    "name"
-                                ) ?: "",
+                                CatalogCryptoUtils.decrypt(document.getString("name")),
 
                             description =
-                                document.getString(
-                                    "description"
-                                ) ?: "",
+                                CatalogCryptoUtils.decrypt(document.getString("description")),
 
                             officeName =
-                                document.getString(
-                                    "officeName"
-                                ) ?: "",
+                                CatalogCryptoUtils.decrypt(document.getString("officeName")),
 
                             officeSchedule =
-                                document.getString(
-                                    "officeSchedule"
-                                ) ?: "",
+                                CatalogCryptoUtils.decrypt(document.getString("officeSchedule")),
 
                             isActive =
                                 document.getBoolean(
@@ -649,7 +639,7 @@ class FirestoreSyncManager(
                             transactionId =
                                 document.getString("transactionId") ?: "",
                             requirementText =
-                                document.getString("requirementText") ?: "",
+                                CatalogCryptoUtils.decrypt(document.getString("requirementText")),
                             displayOrder =
                                 document.getLong("displayOrder")?.toInt() ?: 0,
                             isActive =
@@ -928,12 +918,10 @@ class FirestoreSyncManager(
 
 
                     val instruction =
-                        document.getString(
-                            "instruction"
-                        ) ?: ""
+                        CatalogCryptoUtils.decrypt(document.getString("instruction"))
 
 
-                    val remoteImageUrl =
+                    val rawRemoteImageUrl =
                         document.getString(
                             "remoteImageUrl"
                         )
@@ -941,6 +929,11 @@ class FirestoreSyncManager(
                             ?.takeIf {
                                 it.isNotBlank()
                             }
+
+                    val remoteImageUrl =
+                        rawRemoteImageUrl?.let {
+                            CatalogCryptoUtils.decrypt(it).trim().takeIf { decrypted -> decrypted.isNotBlank() }
+                        }
 
 
                     val imageCaption =
@@ -950,6 +943,9 @@ class FirestoreSyncManager(
                             ?.trim()
                             ?.takeIf {
                                 it.isNotBlank()
+                            }
+                            ?.let {
+                                CatalogCryptoUtils.decrypt(it)
                             }
 
 
@@ -965,9 +961,12 @@ class FirestoreSyncManager(
                             ?.takeIf {
                                 it.isNotBlank()
                             }
+                            ?.let {
+                                CatalogCryptoUtils.decrypt(it)
+                            }
 
 
-                    val websiteUrl =
+                    val rawWebsiteUrl =
                         document.getString(
                             "websiteUrl"
                         )
@@ -975,6 +974,11 @@ class FirestoreSyncManager(
                             ?.takeIf {
                                 it.isNotBlank()
                             }
+
+                    val websiteUrl =
+                        rawWebsiteUrl?.let {
+                            CatalogCryptoUtils.decrypt(it).trim().takeIf { decrypted -> decrypted.isNotBlank() }
+                        }
 
 
                     val isActive =
@@ -1319,50 +1323,52 @@ class FirestoreSyncManager(
                 // CONNECT TO REMOTE IMAGE URL
                 // -----------------------------------------
 
-                val url =
-                    URL(
-                        remoteImageUrl
-                    )
+                val cleanRemoteUrl = CatalogCryptoUtils.decrypt(remoteImageUrl).trim()
+                if (cleanRemoteUrl.isBlank()) {
+                    return@withContext null
+                }
 
+                var currentUrl = cleanRemoteUrl
+                var redirects = 0
+                var finalUrl = URL(cleanRemoteUrl)
 
-                connection =
-                    url.openConnection()
-                            as HttpURLConnection
+                while (redirects < 5) {
+                    val candidateUrl = URL(currentUrl)
+                    finalUrl = candidateUrl
+                    val conn = candidateUrl.openConnection() as HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 20000
+                    conn.instanceFollowRedirects = true
+                    conn.doInput = true
+                    conn.connect()
 
+                    val responseCode = conn.responseCode
+                    if (responseCode in 300..399) {
+                        val location = conn.getHeaderField("Location")
+                        conn.disconnect()
+                        if (!location.isNullOrBlank()) {
+                            currentUrl = URL(candidateUrl, location).toString()
+                            redirects++
+                            continue
+                        } else {
+                            return@withContext null
+                        }
+                    } else if (responseCode !in 200..299) {
+                        conn.disconnect()
+                        return@withContext null
+                    } else {
+                        connection = conn
+                        break
+                    }
+                }
 
-                connection.requestMethod =
-                    "GET"
-
-                connection.connectTimeout =
-                    15000
-
-                connection.readTimeout =
-                    20000
-
-                connection.instanceFollowRedirects =
-                    true
-
-                connection.doInput =
-                    true
-
-
-                connection.connect()
-
-
-                // -----------------------------------------
-                // CHECK RESPONSE
-                // -----------------------------------------
-
-                if (
-                    connection.responseCode !in
-                    200..299
-                ) {
-
+                if (connection == null) {
                     return@withContext null
                 }
 
                 val urlExtension =
-                    url.path
+                    finalUrl.path
                         .substringAfterLast('.', "")
                         .lowercase(Locale.ROOT)
                         .takeIf { it in setOf("png", "jpg", "jpeg", "webp", "gif", "bmp") }
@@ -1486,9 +1492,7 @@ class FirestoreSyncManager(
                                     "transactionId"
                                 ) ?: "",
                             guidelineText =
-                                document.getString(
-                                    "guidelineText"
-                                ) ?: "",
+                                CatalogCryptoUtils.decrypt(document.getString("guidelineText")),
                             displayOrder =
                                 document.getLong(
                                     "displayOrder"
@@ -1660,12 +1664,10 @@ class FirestoreSyncManager(
                         id = document.id,
 
                         title =
-                            document.getString("title")
-                                ?: "",
+                            CatalogCryptoUtils.decrypt(document.getString("title")),
 
                         message =
-                            document.getString("message")
-                                ?: "",
+                            CatalogCryptoUtils.decrypt(document.getString("message")),
 
                         datePosted =
                             datePosted,
